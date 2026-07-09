@@ -1,0 +1,8 @@
+model: gpt-image-1.5
+label:
+  en_US: GPT Image 1.5
+  zh_Hans: GPT Image 1.5
+supported_operations:
+  - generate
+supports_reference_images: false
+supports_mask: false

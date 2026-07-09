@@ -1,0 +1,229 @@
+description:
+  human:
+    en_US: Generate or edit images with Flypower GPT image models.
+    zh_Hans: 使用 Flypower GPT 图像模型生成或编辑图片。
+  llm: Generate images from text, or edit/reference one or more image URLs, using Flypower GPT image models.
+extra:
+  python:
+    source: tools/flypower_image_generate.py
+identity:
+  author: qaqab
+  description:
+    en_US: Generate images from prompts and optional reference image URLs through a Flypower OpenAI-compatible endpoint.
+    zh_Hans: 通过 Flypower OpenAI 兼容接口，根据提示词和可选参考图 URL 生成图片。
+  label:
+    en_US: Flypower Image Generate
+    zh_Hans: Flypower 图像生成
+  name: flypower_image_generate
+parameters:
+- form: llm
+  human_description:
+    en_US: Detailed image prompt.
+    zh_Hans: 详细的图像提示词。
+  label:
+    en_US: Prompt
+    zh_Hans: 提示词
+  llm_description: Detailed image prompt. Describe the desired image clearly.
+  name: prompt
+  required: true
+  type: string
+- default: gpt-image-2
+  form: form
+  human_description:
+    en_US: Select the GPT image model.
+    zh_Hans: 选择 GPT 图像模型。
+  label:
+    en_US: Model
+    zh_Hans: 模型
+  name: model
+  options:
+  - label:
+      en_US: GPT Image 2
+      zh_Hans: GPT Image 2
+    value: gpt-image-2
+  - label:
+      en_US: GPT Image 1.5
+      zh_Hans: GPT Image 1.5
+    value: gpt-image-1.5
+  - label:
+      en_US: GPT Image 1
+      zh_Hans: GPT Image 1
+    value: gpt-image-1
+  required: true
+  type: select
+- form: llm
+  human_description:
+    en_US: Optional reference image URLs. Separate multiple URLs with new lines, commas, or a JSON array.
+    zh_Hans: 可选参考图 URL。多个 URL 可用换行、逗号或 JSON 数组分隔。
+  label:
+    en_US: Reference Image URLs
+    zh_Hans: 参考图 URL
+  llm_description: Optional image URLs used as references. Separate multiple URLs with new lines, commas, or a JSON array.
+  name: reference_image_urls
+  required: false
+  type: string
+- form: llm
+  human_description:
+    en_US: Optional mask image URL used for inpainting. Requires at least one reference image URL.
+    zh_Hans: 可选蒙版图 URL，用于局部编辑。需要同时提供至少一个参考图 URL。
+  label:
+    en_US: Mask URL
+    zh_Hans: 蒙版 URL
+  llm_description: Optional mask image URL used for inpainting. Requires at least one reference image URL.
+  name: mask_url
+  required: false
+  type: string
+- default: auto
+  form: form
+  human_description:
+    en_US: Select the image size.
+    zh_Hans: 选择图像大小。
+  label:
+    en_US: Image Size
+    zh_Hans: 图像大小
+  name: size
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Square (1024x1024)
+      zh_Hans: 方形 (1024x1024)
+    value: "1024x1024"
+  - label:
+      en_US: Landscape (1536x1024)
+      zh_Hans: 横屏/风景 (1536x1024)
+    value: "1536x1024"
+  - label:
+      en_US: Portrait (1024x1536)
+      zh_Hans: 竖屏/肖像 (1024x1536)
+    value: "1024x1536"
+  required: false
+  type: select
+- default: 1
+  form: form
+  human_description:
+    en_US: Number of images to generate, between 1 and 10.
+    zh_Hans: 要生成的图片数量，1 到 10。
+  label:
+    en_US: Number of Images
+    zh_Hans: 图片数量
+  max: 10
+  min: 1
+  name: n
+  required: false
+  type: number
+- default: auto
+  form: form
+  human_description:
+    en_US: Image quality.
+    zh_Hans: 图像质量。
+  label:
+    en_US: Image Quality
+    zh_Hans: 图像质量
+  name: quality
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Low
+      zh_Hans: 低
+    value: low
+  - label:
+      en_US: Medium
+      zh_Hans: 中
+    value: medium
+  - label:
+      en_US: High
+      zh_Hans: 高
+    value: high
+  required: false
+  type: select
+- default: auto
+  form: form
+  human_description:
+    en_US: Output image format.
+    zh_Hans: 输出图片格式。
+  label:
+    en_US: Output Format
+    zh_Hans: 输出格式
+  name: output_format
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: PNG
+      zh_Hans: PNG
+    value: png
+  - label:
+      en_US: JPEG
+      zh_Hans: JPEG
+    value: jpeg
+  - label:
+      en_US: WebP
+      zh_Hans: WebP
+    value: webp
+  required: false
+  type: select
+- default: 100
+  form: form
+  human_description:
+    en_US: Compression level for JPEG or WebP output, between 0 and 100.
+    zh_Hans: JPEG 或 WebP 输出压缩级别，0 到 100。
+  label:
+    en_US: Output Compression
+    zh_Hans: 输出压缩
+  max: 100
+  min: 0
+  name: output_compression
+  required: false
+  type: number
+- default: auto
+  form: form
+  human_description:
+    en_US: Background mode. Transparent is not supported by gpt-image-2.
+    zh_Hans: 背景模式。gpt-image-2 不支持透明背景。
+  label:
+    en_US: Background
+    zh_Hans: 背景
+  name: background
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Opaque
+      zh_Hans: 不透明
+    value: opaque
+  - label:
+      en_US: Transparent
+      zh_Hans: 透明
+    value: transparent
+  required: false
+  type: select
+- default: auto
+  form: form
+  human_description:
+    en_US: Moderation level.
+    zh_Hans: 内容审核级别。
+  label:
+    en_US: Moderation
+    zh_Hans: 内容审核
+  name: moderation
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Low
+      zh_Hans: 低
+    value: low
+  required: false
+  type: select

@@ -1,0 +1,9 @@
+model: gpt-image-1
+label:
+  en_US: GPT Image 1
+  zh_Hans: GPT Image 1
+supported_operations:
+  - generate
+  - edit
+supports_reference_images: true
+supports_mask: true

@@ -1,0 +1,43 @@
+credentials_for_provider:
+  api_key:
+    help:
+      en_US: Enter the same API key used by the Flypower model provider.
+      zh_Hans: 输入与 Flypower 模型供应商相同的 API Key。
+    label:
+      en_US: API Key
+      zh_Hans: API Key
+    placeholder:
+      en_US: Enter API Key
+      zh_Hans: 输入 API Key
+    required: true
+    type: secret-input
+  endpoint_url:
+    help:
+      en_US: Base URL for the OpenAI-compatible image endpoint, e.g. https://litellm.flyfus.com
+      zh_Hans: OpenAI 兼容图像接口 Base URL，例如 https://litellm.flyfus.com
+    label:
+      en_US: API endpoint URL
+      zh_Hans: API 地址
+    placeholder:
+      en_US: Base URL, e.g. https://litellm.flyfus.com
+      zh_Hans: Base URL，例如 https://litellm.flyfus.com
+    required: true
+    type: text-input
+extra:
+  python:
+    source: provider/flypower_image.py
+identity:
+  author: qaqab
+  description:
+    en_US: Generate or edit images through the Flypower OpenAI-compatible image endpoint.
+    zh_Hans: 通过 Flypower OpenAI 兼容图像接口生成或编辑图片。
+  icon: icon.svg
+  label:
+    en_US: Flypower Image
+    zh_Hans: Flypower 图像
+  name: flypower_image
+  tags:
+  - image
+  - productivity
+tools:
+- tools/flypower_image_generate.yaml

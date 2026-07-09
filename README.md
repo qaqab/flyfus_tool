@@ -1,7 +1,9 @@
-# Flypower Image Tool
+# Flypower Tool
 
-这个仓库只用于发布 Dify 插件包，不保存插件源码。
+Dify plugin containing Flypower company tools.
 
-- 插件包在 GitHub Releases 的 Assets 中。
-- Dify 安装地址：https://github.com/qaqab/flypower_image_tool
-- 当前发布版本：0.0.13
+It provides image generation through an OpenAI-compatible endpoint and the
+`set_next_step` tool for passing the next objective and reasoning effort to a
+subsequent model call.
+
+Install from this repository or from a package attached to a GitHub Release.

@@ -1,0 +1,29 @@
+version: 0.0.1
+type: plugin
+author: "qaqab"
+name: "flypower_image_tool"
+description:
+  en_US: Flypower image generation tools for OpenAI-compatible image endpoints.
+  zh_Hans: Flypower OpenAI 兼容图像生成工具。
+label:
+  en_US: "Flypower Image Tool"
+  zh_Hans: "Flypower 图像工具"
+created_at: "2026-07-09T00:00:00Z"
+icon: icon.svg
+resource:
+  memory: 1048576
+  permission:
+    tool:
+      enabled: true
+plugins:
+  tools:
+    - "provider/flypower_image.yaml"
+meta:
+  version: 0.0.1
+  arch:
+    - "amd64"
+    - "arm64"
+  runner:
+    language: "python"
+    version: "3.12"
+    entrypoint: "main"
