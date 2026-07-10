@@ -64,6 +64,17 @@ parameters:
   type: string
 - form: llm
   human_description:
+    en_US: Optional reference image files. They are combined with reference image URLs.
+    zh_Hans: 可选参考图文件。会与参考图 URL 合并使用。
+  label:
+    en_US: Reference Image Files
+    zh_Hans: 参考图文件
+  llm_description: Optional uploaded image files used as references. They are combined with reference image URLs.
+  name: reference_image_files
+  required: false
+  type: files
+- form: llm
+  human_description:
     en_US: Optional mask image URL used for inpainting. Requires at least one reference image URL.
     zh_Hans: 可选蒙版图 URL，用于局部编辑。需要同时提供至少一个参考图 URL。
   label:
@@ -73,6 +84,17 @@ parameters:
   name: mask_url
   required: false
   type: string
+- form: llm
+  human_description:
+    en_US: Optional mask image file used for inpainting. Use either this or Mask URL.
+    zh_Hans: 可选蒙版图文件，用于局部编辑。与蒙版 URL 二选一。
+  label:
+    en_US: Mask File
+    zh_Hans: 蒙版文件
+  llm_description: Optional uploaded mask image file used for inpainting. Use either this or mask_url.
+  name: mask_file
+  required: false
+  type: file
 - default: auto
   form: form
   human_description:
