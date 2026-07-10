@@ -1,0 +1,9 @@
+model: gemini-3.1-flash-image-preview
+label:
+  en_US: Gemini 3.1 Flash Image Preview
+  zh_Hans: Gemini 3.1 Flash Image Preview
+supported_operations:
+  - generate
+  - edit
+supports_reference_images: true
+supports_mask: true

@@ -88,7 +88,7 @@ class FlypowerImageGenerateTool(Tool):
             if reference_urls or reference_files:
                 reference_count = len(reference_urls) + len(reference_files)
                 if reference_count > MAX_REFERENCE_IMAGES:
-                    yield self.create_text_message(f"Error: At most {MAX_REFERENCE_IMAGES} reference image URLs are supported.")
+                    yield self.create_text_message(f"Error: At most {MAX_REFERENCE_IMAGES} reference images are supported.")
                     return
                 if mask_url and mask_file:
                     yield self.create_text_message("Error: Use either mask_url or mask_file, not both.")
