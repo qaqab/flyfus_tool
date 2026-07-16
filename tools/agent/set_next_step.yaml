@@ -60,4 +60,4 @@ parameters:
     llm_description: Briefly explain why this reasoning effort is appropriate.
 extra:
   python:
-    source: tools/set_next_step.py
+    source: tools/agent/set_next_step.py

@@ -41,5 +41,5 @@ identity:
     - productivity
     - utilities
 tools:
-  - tools/flypower_image_generate.yaml
-  - tools/set_next_step.yaml
+  - tools/image/flypower_image_generate.yaml
+  - tools/agent/set_next_step.yaml

@@ -5,7 +5,7 @@ description:
   llm: Generate images from text, or edit/reference one or more image URLs, using Flypower GPT image models.
 extra:
   python:
-    source: tools/flypower_image_generate.py
+    source: tools/image/flypower_image_generate.py
 identity:
   author: qaqab
   description:

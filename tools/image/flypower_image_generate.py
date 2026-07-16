@@ -14,7 +14,7 @@ from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
 from openai import OpenAI
 
-from tools._image_utils import (
+from tools.image._image_utils import (
     ModelListRequestError,
     build_usage_metadata,
     decode_image,

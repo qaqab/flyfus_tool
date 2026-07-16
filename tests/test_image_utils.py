@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 import requests
 
-from tools._image_utils import (
+from tools.image._image_utils import (
     ModelListRequestError,
     fetch_openai_model_ids,
     normalize_openai_base_url,
@@ -41,7 +41,7 @@ def test_fetch_openai_model_ids_uses_the_openai_models_endpoint(monkeypatch: pyt
             payload={"data": [{"id": "gpt-image-2"}, {"id": "gpt-5.4"}]},
         )
 
-    monkeypatch.setattr("tools._image_utils.requests.get", fake_get)
+    monkeypatch.setattr("tools.image._image_utils.requests.get", fake_get)
 
     model_ids = fetch_openai_model_ids("https://litellm.flyfus.com", "test-api-key")
 
@@ -95,7 +95,7 @@ def test_fetch_openai_model_ids_redacts_api_key_from_http_errors(monkeypatch: py
     ) -> FakeResponse:
         return FakeResponse(status_code=401, payload={"error": []})
 
-    monkeypatch.setattr("tools._image_utils.requests.get", fake_get)
+    monkeypatch.setattr("tools.image._image_utils.requests.get", fake_get)
 
     with pytest.raises(ModelListRequestError) as raised:
         fetch_openai_model_ids("https://litellm.flyfus.com", "test-api-key")
@@ -114,7 +114,7 @@ def test_fetch_openai_model_ids_drops_the_original_header_error(monkeypatch: pyt
     ) -> FakeResponse:
         raise requests.exceptions.InvalidHeader("Invalid header value Bearer test-api-key")
 
-    monkeypatch.setattr("tools._image_utils.requests.get", fake_get)
+    monkeypatch.setattr("tools.image._image_utils.requests.get", fake_get)
 
     with pytest.raises(ModelListRequestError) as raised:
         fetch_openai_model_ids("https://litellm.flyfus.com", "test-api-key")

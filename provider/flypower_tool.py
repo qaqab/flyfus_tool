@@ -4,7 +4,7 @@ from typing import Any
 from dify_plugin import ToolProvider
 from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
-from tools._image_utils import ModelListRequestError, fetch_openai_model_ids, image_model_ids
+from tools.image._image_utils import ModelListRequestError, fetch_openai_model_ids, image_model_ids
 
 logger = logging.getLogger(__name__)
 
