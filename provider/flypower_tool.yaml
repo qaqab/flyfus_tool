@@ -42,4 +42,4 @@ identity:
     - utilities
 tools:
   - tools/image/flypower_image_generate.yaml
-  - tools/agent/set_next_step.yaml
+  - tools/next_step/set_next_step.yaml
