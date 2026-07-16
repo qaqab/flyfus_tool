@@ -1,0 +1,63 @@
+identity:
+  author: qaqab
+  name: set_next_step
+  label:
+    en_US: Set Next Step
+    zh_Hans: 设置下一步
+description:
+  human:
+    en_US: Set the next task state, objective, and reasoning effort for the next model call.
+    zh_Hans: 设置下一步任务状态、目标和下一次模型调用的推理强度。
+  llm: Set the next agent task state and objective. Select the reasoning effort for the following model call.
+parameters:
+  - name: next_state
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: plan
+        label: {en_US: Plan, zh_Hans: 规划}
+      - value: act
+        label: {en_US: Act, zh_Hans: 执行}
+      - value: observe
+        label: {en_US: Observe, zh_Hans: 观察}
+      - value: verify
+        label: {en_US: Verify, zh_Hans: 验证}
+      - value: write_output
+        label: {en_US: Write Output, zh_Hans: 输出结果}
+    label: {en_US: Next State, zh_Hans: 下一步状态}
+    human_description: {en_US: The agent's next execution state., zh_Hans: Agent 下一步的执行状态。}
+    llm_description: Choose the next execution state.
+  - name: next_effort
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: low
+        label: {en_US: Low, zh_Hans: 低}
+      - value: medium
+        label: {en_US: Medium, zh_Hans: 中}
+      - value: high
+        label: {en_US: High, zh_Hans: 高}
+      - value: xhigh
+        label: {en_US: Extra High, zh_Hans: 极高}
+    label: {en_US: Reasoning Effort, zh_Hans: 推理强度}
+    human_description: {en_US: Reasoning effort for the following model call., zh_Hans: 下一次模型调用的推理强度。}
+    llm_description: Choose low, medium, high, or xhigh for the following model call.
+  - name: next_objective
+    type: string
+    required: true
+    form: llm
+    label: {en_US: Next Objective, zh_Hans: 下一步目标}
+    human_description: {en_US: A short, concrete objective for the next step., zh_Hans: 下一步要完成的简短具体目标。}
+    llm_description: State the next concrete objective concisely.
+  - name: effort_reason
+    type: string
+    required: true
+    form: llm
+    label: {en_US: Effort Reason, zh_Hans: 强度理由}
+    human_description: {en_US: Why this reasoning effort is appropriate., zh_Hans: 选择该推理强度的理由。}
+    llm_description: Briefly explain why this reasoning effort is appropriate.
+extra:
+  python:
+    source: tools/set_next_step.py

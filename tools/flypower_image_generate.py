@@ -56,7 +56,10 @@ class FlypowerImageGenerateTool(Tool):
             yield self.create_text_message(f"Model {model} does not support {operation} in the image model YAML.")
             return
 
-        api_key = str(self.runtime.credentials["api_key"])
+        api_key = str(self.runtime.credentials.get("api_key") or "")
+        if not api_key:
+            yield self.create_text_message("API key is required for image generation.")
+            return
         try:
             normalized_base_url = normalize_openai_base_url(self.runtime.credentials.get("endpoint_url"))
             if normalized_base_url is None:

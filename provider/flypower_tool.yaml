@@ -1,0 +1,45 @@
+credentials_for_provider:
+  api_key:
+    help:
+      en_US: Optional. Required only for image generation.
+      zh_Hans: 可选。仅图像生成工具需要。
+    label:
+      en_US: API Key
+      zh_Hans: API Key
+    placeholder:
+      en_US: Enter API Key
+      zh_Hans: 输入 API Key
+    required: false
+    type: secret-input
+  endpoint_url:
+    help:
+      en_US: Optional. Required only for image generation.
+      zh_Hans: 可选。仅图像生成工具需要。
+    label:
+      en_US: API endpoint URL
+      zh_Hans: API 地址
+    placeholder:
+      en_US: Base URL, e.g. https://litellm.flyfus.com
+      zh_Hans: Base URL，例如 https://litellm.flyfus.com
+    required: false
+    type: text-input
+extra:
+  python:
+    source: provider/flypower_tool.py
+identity:
+  author: qaqab
+  description:
+    en_US: Flypower tools for generating images and controlling the next agent step.
+    zh_Hans: Flypower 图像生成与下一步 Agent 控制工具。
+  icon: icon.svg
+  label:
+    en_US: Flypower Tool
+    zh_Hans: Flypower 工具
+  name: flypower_tool
+  tags:
+    - image
+    - productivity
+    - utilities
+tools:
+  - tools/flypower_image_generate.yaml
+  - tools/set_next_step.yaml

@@ -219,7 +219,7 @@ wheels = [
 ]
 
 [[package]]
-name = "flypower-image-tool"
+name = "flypower-tool"
 version = "0.0.4"
 source = { virtual = "." }
 dependencies = [

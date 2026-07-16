@@ -1,7 +1,7 @@
 [project]
-name = "flypower-image-tool"
+name = "flypower-tool"
 version = "0.0.4"
-description = "Dify image generation tool plugin for Flypower OpenAI-compatible endpoints."
+description = "Dify tools plugin for Flypower image generation and agent task control."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

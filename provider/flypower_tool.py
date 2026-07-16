@@ -9,10 +9,12 @@ from tools._image_utils import ModelListRequestError, fetch_openai_model_ids, im
 logger = logging.getLogger(__name__)
 
 
-class FlypowerImageProvider(ToolProvider):
+class FlypowerToolProvider(ToolProvider):
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         endpoint_url = str(credentials.get("endpoint_url") or "").strip()
         api_key = str(credentials.get("api_key") or "").strip()
+        if not endpoint_url and not api_key:
+            return
         if not endpoint_url:
             raise ToolProviderCredentialValidationError("请填写 API 地址")
         if not api_key:
