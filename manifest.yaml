@@ -1,4 +1,4 @@
-version: 0.0.19
+version: 0.0.21
 type: plugin
 author: "qaqab"
 name: "flypower_tool"
@@ -19,7 +19,7 @@ plugins:
   tools:
     - "provider/flypower_tool.yaml"
 meta:
-  version: 0.0.19
+  version: 0.0.21
   arch:
     - "amd64"
     - "arm64"
