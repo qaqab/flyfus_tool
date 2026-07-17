@@ -1,0 +1,50 @@
+identity:
+  author: qaqab
+  name: flyfus_skills
+  label:
+    en_US: Flyfus Skills
+    zh_Hans: Flyfus 技能
+description:
+  human:
+    en_US: List the skills available to an agent or load one skill's complete prompt.
+    zh_Hans: 查询 Agent 可用的技能，或加载一个技能的完整提示词。
+  llm: |-
+    使用此工具查询或加载 Flyfus 技能。
+    - method=list_skills：传入 agent_name，返回可用技能及其描述。
+    - method=load_skill：传入 agent_name 和 skill_name，返回该技能的完整提示词。
+parameters:
+  - name: method
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: list_skills
+        label: {en_US: List Skills, zh_Hans: 查询技能}
+      - value: load_skill
+        label: {en_US: Load Skill, zh_Hans: 加载技能}
+    label: {en_US: Method, zh_Hans: 方法}
+    human_description:
+      en_US: Choose list_skills to list available skills or load_skill to load one complete prompt.
+      zh_Hans: list_skills 查询可用技能；load_skill 加载一个技能的完整提示词。
+    llm_description: "只能选择 list_skills 或 load_skill。"
+  - name: agent_name
+    type: string
+    required: true
+    form: llm
+    label: {en_US: Agent Name, zh_Hans: Agent 名称}
+    human_description:
+      en_US: Agent name used to list or load skills.
+      zh_Hans: 用于查询或加载技能的 Agent 名称。
+    llm_description: "Agent 名称，例如 listing-agent。"
+  - name: skill_name
+    type: string
+    required: false
+    form: llm
+    label: {en_US: Skill Name, zh_Hans: 技能名称}
+    human_description:
+      en_US: Required only when method is load_skill.
+      zh_Hans: 仅当 method=load_skill 时必填。
+    llm_description: "仅当 method=load_skill 时填写技能名称，例如 listing-diagnosis。"
+extra:
+  python:
+    source: tools/skills/flyfus_skills.py

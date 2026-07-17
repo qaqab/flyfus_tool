@@ -35,63 +35,84 @@ MAX_INPUT_DOWNLOAD_BYTES = 50 * 1024 * 1024
 INPUT_DOWNLOAD_TIMEOUT = 300
 OSS_UPLOAD_TIMEOUT = (10.0, 120.0)
 MAX_OSS_UPLOAD_WORKERS = 4
-MAX_INVALID_JSON_RETRIES = 3
+MAX_IMAGE_REQUEST_RETRIES = 3
+MAX_OSS_UPLOAD_RETRIES = 2
 
 
 class FlypowerImageGenerateTool(Tool):
     def _invoke(self, tool_parameters: dict) -> Generator[ToolInvokeMessage, None, None]:
         log_id = str(uuid.uuid4())
+        started_at = time.monotonic()
         prompt = tool_parameters.get("prompt")
+        requested_model = str(tool_parameters.get("model", "gpt-image-2"))
+        self._write_invocation_log(
+            log_id,
+            "started",
+            model=requested_model,
+            prompt_characters=len(prompt) if isinstance(prompt, str) else 0,
+            has_reference_input=bool(tool_parameters.get("reference_image_urls")),
+            user_id=self.runtime.user_id or "-",
+            session_id=self.runtime.session_id or "-",
+        )
+
+        def fail(error: str, stage: str) -> Generator[ToolInvokeMessage, None, None]:
+            self._write_invocation_log(
+                log_id,
+                "failed",
+                model=requested_model,
+                stage=stage,
+                elapsed_ms=self._elapsed_ms(started_at),
+            )
+            yield from self._error_messages(error)
+
         if not prompt or not isinstance(prompt, str):
-            yield from self._error_messages("Error: Prompt is required.")
+            yield from fail("Error: Prompt is required.", "validation")
             return
 
-        model = tool_parameters.get("model", "gpt-image-2")
+        model = requested_model
         supported_models = image_model_ids()
         if model not in supported_models:
-            yield from self._error_messages(f"Invalid model. Choose from: {', '.join(sorted(supported_models))}.")
+            yield from fail(f"Invalid model. Choose from: {', '.join(sorted(supported_models))}.", "validation")
             return
 
         try:
             reference_urls = self._parse_urls(tool_parameters.get("reference_image_urls"))
             mask_url = self._first_url(tool_parameters.get("mask_url"))
         except ValueError as error:
-            yield from self._error_messages(str(error))
+            yield from fail(str(error), "validation")
             return
         operation = "edit" if reference_urls else "generate"
+        self._write_invocation_log(log_id, "validated", model=model, operation=operation, reference_count=len(reference_urls))
         if not image_model_supports_operation(model, operation):
-            yield from self._error_messages(f"Model {model} does not support {operation} in the image model YAML.")
+            yield from fail(f"Model {model} does not support {operation} in the image model YAML.", "validation")
             return
 
         api_key = str(self.runtime.credentials.get("api_key") or "")
         if not api_key:
-            yield from self._error_messages("API key is required for image generation.")
+            yield from fail("API key is required for image generation.", "credentials")
             return
         try:
             normalized_base_url = normalize_openai_base_url(self.runtime.credentials.get("endpoint_url"))
             if normalized_base_url is None:
-                yield from self._error_messages("API endpoint is missing.")
+                yield from fail("API endpoint is missing.", "credentials")
                 return
             available_models = fetch_openai_model_ids(normalized_base_url, api_key)
         except ValueError as error:
-            yield from self._error_messages(f"Invalid API endpoint: {error}")
+            yield from fail(f"Invalid API endpoint: {error}", "model_validation")
             return
         except ModelListRequestError as error:
-            yield from self._error_messages(f"Failed to validate API access: {error}")
+            yield from fail(f"Failed to validate API access: {error}", "model_validation")
             return
         if model not in available_models:
             matched_models = sorted(supported_models & available_models)
             if matched_models:
-                yield from self._error_messages(
-                    f"Model {model} is not available from /models. Available image models: {', '.join(matched_models)}."
-                )
+                yield from fail(f"Model {model} is not available from /models. Available image models: {', '.join(matched_models)}.", "model_validation")
             else:
-                yield from self._error_messages(
-                    f"No supported image model was returned by /models. Expected one of: {', '.join(sorted(supported_models))}."
-                )
+                yield from fail(f"No supported image model was returned by /models. Expected one of: {', '.join(sorted(supported_models))}.", "model_validation")
             return
 
-        client = OpenAI(api_key=api_key, base_url=normalized_base_url)
+        # Keep retry behavior in this tool so every retry can be logged.
+        client = OpenAI(api_key=api_key, base_url=normalized_base_url, max_retries=0)
 
         try:
             args: dict[str, Any] = {
@@ -100,27 +121,65 @@ class FlypowerImageGenerateTool(Tool):
             }
             error = self._apply_common_parameters(args, tool_parameters, model=model)
             if error:
-                yield from self._error_messages(error)
+                yield from fail(error, "parameter_validation")
                 return
 
             if reference_urls:
                 reference_count = len(reference_urls)
                 if reference_count > MAX_REFERENCE_IMAGES:
-                    yield from self._error_messages(f"Error: At most {MAX_REFERENCE_IMAGES} reference images are supported.")
+                    yield from fail(f"Error: At most {MAX_REFERENCE_IMAGES} reference images are supported.", "parameter_validation")
                     return
-                response = self._run_image_request_with_invalid_json_retry(
-                    lambda: self._edit_images_with_files(client, args, reference_urls, mask_url)
+                self._write_invocation_log(log_id, "request_started", model=model, operation=operation, reference_count=reference_count)
+                response = self._run_image_request_with_retry(
+                    lambda: self._edit_images_with_files(
+                        client,
+                        args,
+                        reference_urls,
+                        mask_url,
+                        on_download_event=lambda event, **fields: self._write_invocation_log(
+                            log_id, f"reference_download_{event}", model=model, operation=operation, **fields
+                        ),
+                    ),
+                    on_retry=lambda attempt, error: self._write_invocation_log(
+                        log_id,
+                        "request_retry",
+                        model=model,
+                        operation=operation,
+                        attempt=attempt,
+                        max_retries=MAX_IMAGE_REQUEST_RETRIES,
+                        exception_type=type(error).__name__,
+                    ),
                 )
             else:
                 if mask_url:
-                    yield from self._error_messages("Error: mask requires at least one reference image URL.")
+                    yield from fail("Error: mask requires at least one reference image URL.", "parameter_validation")
                     return
-                response = self._run_image_request_with_invalid_json_retry(
-                    lambda: client.images.generate(**args)
+                self._write_invocation_log(log_id, "request_started", model=model, operation=operation, reference_count=0)
+                response = self._run_image_request_with_retry(
+                    lambda: client.images.generate(**args),
+                    on_retry=lambda attempt, error: self._write_invocation_log(
+                        log_id,
+                        "request_retry",
+                        model=model,
+                        operation=operation,
+                        attempt=attempt,
+                        max_retries=MAX_IMAGE_REQUEST_RETRIES,
+                        exception_type=type(error).__name__,
+                    ),
                 )
         except Exception as error:
-            yield from self._error_messages(f"Failed to {operation} image: {error}")
+            self._write_invocation_log(log_id, "request_failed", model=model, operation=operation, elapsed_ms=self._elapsed_ms(started_at), exception_type=type(error).__name__)
+            yield from fail(f"Failed to {operation} image: {error}", "image_request")
             return
+        self._write_invocation_log(
+            log_id,
+            "request_succeeded",
+            model=model,
+            operation=operation,
+            elapsed_ms=self._elapsed_ms(started_at),
+            image_count=len(getattr(response, "data", [])),
+            upstream_request_id=getattr(response, "_request_id", None) or "-",
+        )
 
         uploads: list[tuple[str, bytes | str, str, str]] = []
         try:
@@ -133,22 +192,24 @@ class FlypowerImageGenerateTool(Tool):
                 elif image_url:
                     uploads.append(("url", str(image_url), "", ""))
         except Exception as error:
-            yield from self._error_messages(f"Failed to process generated images: {error}")
+            yield from fail(f"Failed to process generated images: {error}", "response_processing")
             return
 
         if not uploads:
-            yield from self._error_messages("The image model did not return any images.")
+            yield from fail("The image model did not return any images.", "response_processing")
             return
 
         try:
+            self._write_invocation_log(log_id, "oss_upload_started", model=model, operation=operation, image_count=len(uploads))
             with ThreadPoolExecutor(max_workers=min(MAX_OSS_UPLOAD_WORKERS, len(uploads))) as executor:
                 upload_to_oss = partial(self._upload_output_to_oss, log_id=log_id)
                 oss_urls = list(executor.map(upload_to_oss, uploads))
         except Exception as error:
-            yield from self._error_messages(f"Failed to upload generated images to OSS (log_id={log_id}): {error}")
+            yield from fail(f"Failed to upload generated images to OSS (log_id={log_id}): {error}", "oss_upload")
             return
 
         usage_metadata = build_usage_metadata(response)
+        self._write_invocation_log(log_id, "succeeded", model=model, operation=operation, elapsed_ms=self._elapsed_ms(started_at), image_count=len(oss_urls))
         yield self.create_json_message({"urls": oss_urls, **usage_metadata})
         yield self.create_text_message(json.dumps(oss_urls, ensure_ascii=False))
 
@@ -157,23 +218,25 @@ class FlypowerImageGenerateTool(Tool):
         yield self.create_text_message("[]")
 
     @staticmethod
-    def _run_image_request_with_invalid_json_retry(request):
-        for attempt in range(MAX_INVALID_JSON_RETRIES + 1):
+    def _run_image_request_with_retry(request, on_retry=None):
+        for attempt in range(MAX_IMAGE_REQUEST_RETRIES + 1):
             try:
                 return request()
             except Exception as error:
-                if attempt >= MAX_INVALID_JSON_RETRIES or not FlypowerImageGenerateTool._is_invalid_json_error(error):
+                if attempt >= MAX_IMAGE_REQUEST_RETRIES or not FlypowerImageGenerateTool._is_retryable_image_error(error):
                     raise
+                if on_retry:
+                    on_retry(attempt + 1, error)
                 time.sleep(0.5 * (attempt + 1))
 
         raise RuntimeError("Image request retry loop exited unexpectedly.")
 
     @staticmethod
-    def _is_invalid_json_error(error: Exception) -> bool:
+    def _is_retryable_image_error(error: Exception) -> bool:
         message = str(error).lower()
         return "json_invalid" in message or (
             "invalid json" in message and ("<!doctype html" in message or "expected value" in message)
-        )
+        ) or any(marker in message for marker in ("timeout", "connection", "rate limit", "429", "502", "503", "504"))
 
     @staticmethod
     def _output_filename(index: int, mime_type: str) -> str:
@@ -190,39 +253,72 @@ class FlypowerImageGenerateTool(Tool):
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {oss_api_token}"}
         endpoint = f"{oss_api_base_url}/v1/oss-assets/image-{'url' if upload_type == 'url' else 'file'}/upload"
+        response = None
         started_at = time.monotonic()
-        try:
-            if upload_type == "url":
-                response = requests.post(
-                    endpoint,
-                    headers=headers,
-                    json={"image_url": payload},
-                    timeout=OSS_UPLOAD_TIMEOUT,
-                    allow_redirects=False,
+        for attempt in range(MAX_OSS_UPLOAD_RETRIES + 1):
+            try:
+                if upload_type == "url":
+                    response = requests.post(
+                        endpoint,
+                        headers=headers,
+                        json={"image_url": payload},
+                        timeout=OSS_UPLOAD_TIMEOUT,
+                        allow_redirects=False,
+                    )
+                else:
+                    response = requests.post(
+                        endpoint,
+                        headers=headers,
+                        files={"file": (filename, payload, mime_type), "filename": (None, filename)},
+                        timeout=OSS_UPLOAD_TIMEOUT,
+                        allow_redirects=False,
+                    )
+            except requests.RequestException as error:
+                if attempt < MAX_OSS_UPLOAD_RETRIES:
+                    self._write_oss_log(
+                        log_id,
+                        "retry",
+                        upload_type=upload_type,
+                        filename=filename,
+                        attempt=attempt + 1,
+                        max_retries=MAX_OSS_UPLOAD_RETRIES,
+                        exception_type=type(error).__name__,
+                    )
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                self._write_oss_log(
+                    log_id,
+                    "request_failed",
+                    upload_type=upload_type,
+                    filename=filename,
+                    mime_type=mime_type or "-",
+                    payload_size=payload_size,
+                    payload_sha256=payload_sha256,
+                    elapsed_ms=self._elapsed_ms(started_at),
+                    exception_type=type(error).__name__,
                 )
-            else:
-                response = requests.post(
-                    endpoint,
-                    headers=headers,
-                    files={"file": (filename, payload, mime_type), "filename": (None, filename)},
-                    timeout=OSS_UPLOAD_TIMEOUT,
-                    allow_redirects=False,
-                )
-        except requests.RequestException as error:
-            self._write_oss_log(
-                log_id,
-                "request_failed",
-                upload_type=upload_type,
-                endpoint=endpoint,
-                filename=filename,
-                mime_type=mime_type or "-",
-                payload_size=payload_size,
-                payload_sha256=payload_sha256,
-                error=str(error),
-            )
-            raise RuntimeError(f"OSS upload request failed for {endpoint} (log_id={log_id}): {error}") from error
+                raise RuntimeError(f"OSS upload request failed (log_id={log_id}): {type(error).__name__}") from error
 
-        elapsed_ms = round((time.monotonic() - started_at) * 1000)
+            if response.status_code < 500 and response.status_code != 429:
+                break
+            if attempt < MAX_OSS_UPLOAD_RETRIES:
+                self._write_oss_log(
+                    log_id,
+                    "retry",
+                    upload_type=upload_type,
+                    filename=filename,
+                    attempt=attempt + 1,
+                    max_retries=MAX_OSS_UPLOAD_RETRIES,
+                    status_code=response.status_code,
+                )
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            break
+
+        if response is None:
+            raise RuntimeError(f"OSS upload did not return a response (log_id={log_id})")
+
+        elapsed_ms = self._elapsed_ms(started_at)
         request_id = response.headers.get("x-fc-request-id") or response.headers.get("x-request-id") or ""
 
         if not 200 <= response.status_code < 300:
@@ -231,7 +327,6 @@ class FlypowerImageGenerateTool(Tool):
                 log_id,
                 "failed",
                 upload_type=upload_type,
-                endpoint=endpoint,
                 filename=filename,
                 mime_type=mime_type or "-",
                 payload_size=payload_size,
@@ -239,7 +334,6 @@ class FlypowerImageGenerateTool(Tool):
                 status_code=response.status_code,
                 elapsed_ms=elapsed_ms,
                 request_id=request_id or "-",
-                response_body=" ".join(response_text.split())[:500] or "-",
             )
             detail = f": {response_text[:500]}" if response_text else ""
             request_id_detail = f" (request_id={request_id})" if request_id else ""
@@ -269,6 +363,13 @@ class FlypowerImageGenerateTool(Tool):
 
     def _write_oss_log(self, log_id: str, event: str, **fields: object) -> None:
         write_tool_log(self.runtime.credentials, log_id, f"oss_upload_{event}", **fields)
+
+    def _write_invocation_log(self, log_id: str, event: str, **fields: object) -> None:
+        write_tool_log(self.runtime.credentials, log_id, f"image_{event}", **fields)
+
+    @staticmethod
+    def _elapsed_ms(started_at: float) -> int:
+        return round((time.monotonic() - started_at) * 1000)
 
     @staticmethod
     def _parse_urls(value: object) -> list[str]:
@@ -320,18 +421,29 @@ class FlypowerImageGenerateTool(Tool):
         args: dict[str, Any],
         reference_urls: list[str],
         mask_url: str | None,
+        on_download_event=None,
     ) -> Any:
         image_files: list[io.BytesIO] = []
         mask_file: io.BytesIO | None = None
         try:
             for index, url in enumerate(reference_urls, start=1):
-                image_files.append(FlypowerImageGenerateTool._download_input_image(url, default_name=f"reference_image_{index}"))
+                image_files.append(
+                    FlypowerImageGenerateTool._download_input_image(
+                        url,
+                        default_name=f"reference_image_{index}",
+                        on_event=on_download_event,
+                        input_kind="reference",
+                        index=index,
+                    )
+                )
 
             multipart_args = dict(args)
             multipart_args["image"] = image_files[0] if len(image_files) == 1 else image_files
 
             if mask_url:
-                mask_file = FlypowerImageGenerateTool._download_input_image(mask_url, default_name="mask_image")
+                mask_file = FlypowerImageGenerateTool._download_input_image(
+                    mask_url, default_name="mask_image", on_event=on_download_event, input_kind="mask", index=1
+                )
                 multipart_args["mask"] = mask_file
 
             return client.images.edit(**multipart_args)
@@ -342,36 +454,48 @@ class FlypowerImageGenerateTool(Tool):
                 mask_file.close()
 
     @staticmethod
-    def _download_input_image(url: str, *, default_name: str) -> io.BytesIO:
+    def _download_input_image(url: str, *, default_name: str, on_event=None, input_kind: str, index: int) -> io.BytesIO:
         FlypowerImageGenerateTool._validate_http_url(url)
+        started_at = time.monotonic()
+        if on_event:
+            on_event("started", input_kind=input_kind, index=index)
         if url.startswith("data:image/"):
             mime_type, image_data = decode_image(url)
             image_file = io.BytesIO(image_data)
             image_file.name = f"{default_name}{FlypowerImageGenerateTool._extension_for_mime_type(mime_type)}"
+            if on_event:
+                on_event("succeeded", input_kind=input_kind, index=index, elapsed_ms=FlypowerImageGenerateTool._elapsed_ms(started_at), payload_size=len(image_data), content_type=mime_type)
             return image_file
 
-        response = requests.get(url, timeout=INPUT_DOWNLOAD_TIMEOUT, stream=True)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, timeout=INPUT_DOWNLOAD_TIMEOUT, stream=True)
+            response.raise_for_status()
 
-        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-        if content_type and not content_type.startswith("image/"):
-            raise ValueError(f"URL is not an image: {url}")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if content_type and not content_type.startswith("image/"):
+                raise ValueError(f"URL is not an image: {url}")
 
-        chunks: list[bytes] = []
-        downloaded = 0
-        for chunk in response.iter_content(chunk_size=1024 * 256):
-            if not chunk:
-                continue
-            downloaded += len(chunk)
-            if downloaded > MAX_INPUT_DOWNLOAD_BYTES:
-                raise ValueError(f"Input image is larger than {MAX_INPUT_DOWNLOAD_BYTES // 1024 // 1024}MB: {url}")
-            chunks.append(chunk)
+            chunks: list[bytes] = []
+            downloaded = 0
+            for chunk in response.iter_content(chunk_size=1024 * 256):
+                if not chunk:
+                    continue
+                downloaded += len(chunk)
+                if downloaded > MAX_INPUT_DOWNLOAD_BYTES:
+                    raise ValueError(f"Input image is larger than {MAX_INPUT_DOWNLOAD_BYTES // 1024 // 1024}MB: {url}")
+                chunks.append(chunk)
 
-        if not chunks:
-            raise ValueError(f"Input image URL returned an empty body: {url}")
+            if not chunks:
+                raise ValueError(f"Input image URL returned an empty body: {url}")
 
-        image_file = io.BytesIO(b"".join(chunks))
-        image_file.name = f"{default_name}{FlypowerImageGenerateTool._guess_extension(url, content_type)}"
+            image_file = io.BytesIO(b"".join(chunks))
+            image_file.name = f"{default_name}{FlypowerImageGenerateTool._guess_extension(url, content_type)}"
+        except Exception as error:
+            if on_event:
+                on_event("failed", input_kind=input_kind, index=index, elapsed_ms=FlypowerImageGenerateTool._elapsed_ms(started_at), exception_type=type(error).__name__)
+            raise
+        if on_event:
+            on_event("succeeded", input_kind=input_kind, index=index, elapsed_ms=FlypowerImageGenerateTool._elapsed_ms(started_at), payload_size=downloaded, content_type=content_type or "-")
         return image_file
 
     @staticmethod

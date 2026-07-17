@@ -95,6 +95,42 @@ credentials_for_provider:
       zh_Hans: 输入 SLS AccessKey Secret
     required: true
     type: secret-input
+  geo_url:
+    help:
+      en_US: Optional backend base URL used by the Skills tool.
+      zh_Hans: 可选。Skills 工具使用的后端基础地址。
+    label:
+      en_US: Geo URL
+      zh_Hans: Geo 地址
+    placeholder:
+      en_US: https://example.com
+      zh_Hans: https://example.com
+    required: false
+    type: text-input
+  geo_key:
+    help:
+      en_US: Optional bearer token for the Skills tool backend.
+      zh_Hans: 可选。Skills 工具后端的 Bearer Token。
+    label:
+      en_US: Geo Key
+      zh_Hans: Geo Key
+    placeholder:
+      en_US: Enter Skills API Key
+      zh_Hans: 输入 Skills API Key
+    required: false
+    type: secret-input
+  env:
+    help:
+      en_US: Optional environment sent to the Skills tool backend.
+      zh_Hans: 可选。Skills 工具后端使用的环境标识。
+    label:
+      en_US: Skills Environment
+      zh_Hans: Skills 环境
+    placeholder:
+      en_US: prod
+      zh_Hans: prod
+    required: false
+    type: text-input
 extra:
   python:
     source: provider/flypower_tool.py
@@ -116,3 +152,4 @@ tools:
   - tools/image/flypower_image_generate.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
+  - tools/skills/flyfus_skills.yaml
