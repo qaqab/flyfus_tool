@@ -152,4 +152,4 @@ tools:
   - tools/image/flypower_image_generate.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
-  - tools/skills/flyfus_skills.yaml
+  - tools/skills/flypower_skills.yaml

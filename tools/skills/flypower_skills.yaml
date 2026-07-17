@@ -1,0 +1,64 @@
+identity:
+  author: qaqab
+  name: flypower_skills
+  label:
+    en_US: Flypower Skills
+    zh_Hans: Flypower 技能
+description:
+  human:
+    en_US: List an agent's available skills, then load one or more complete skill prompts.
+    zh_Hans: 查询 Agent 的可用技能，再加载一个或多个技能的完整提示词。
+  llm: |-
+    查询或加载 Flypower Skills。Skills 环境由工具配置决定，不要传入 env。
+
+    method=list_skills：
+    - 必填参数：agent_name。
+    - 返回该 Agent 可用的 skill_name 和技能描述。
+    - 需要加载技能前，应先调用本方法。
+
+    method=load_skill：
+    - 必填参数：agent_name、skill_names。
+    - agent_name 必须与 list_skills 调用时一致。
+    - skill_names 必须使用 list_skills 返回的原始名称。支持一个或多个技能；多个名称用逗号或换行分隔。
+    - 返回文本是 JSON 数组：[{"skill_name":"技能名称","skill_prompt":"完整提示词"}]。
+    - 不要猜测、改写或编造 skill_names。
+parameters:
+  - name: method
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: list_skills
+        label: {en_US: List Skills, zh_Hans: 查询技能}
+      - value: load_skill
+        label: {en_US: Load Skill, zh_Hans: 加载技能}
+    label: {en_US: Method, zh_Hans: 方法}
+    human_description:
+      en_US: list_skills returns available skills. load_skill returns complete prompts for one or more listed skills.
+      zh_Hans: list_skills 返回可用技能；load_skill 返回一个或多个已列出技能的完整提示词。
+    llm_description: "list_skills 只需 agent_name。load_skill 需要 agent_name 和 skill_names，可同时加载多个已列出的技能。"
+  - name: agent_name
+    type: string
+    required: true
+    form: llm
+    label: {en_US: Agent Name, zh_Hans: Agent 名称}
+    human_description:
+      en_US: The agent whose skills you want to discover or load.
+      zh_Hans: 要查询或加载其技能的 Agent 名称。
+    llm_description: "查询和加载同一个技能时，agent_name 必须保持一致，例如 agent_2。"
+  - name: skill_names
+    type: string
+    required: false
+    form: llm
+    label: {en_US: Skill Names, zh_Hans: 技能名称列表}
+    human_description:
+      en_US: Required only for load_skill. Pass exact names returned by list_skills, separated by commas or new lines when loading multiple skills.
+      zh_Hans: 仅当 method=load_skill 时必填。使用 list_skills 返回的精确名称；加载多个技能时用逗号或换行分隔。
+    llm_description: |-
+      仅当 method=load_skill 时填写。必须使用 list_skills 返回的原始名称。
+      单个示例：test_skills
+      多个示例：test_skills,listing-diagnosis
+      也可每行填写一个名称。
+extra:
+  python:
+    source: tools/skills/flypower_skills.py
