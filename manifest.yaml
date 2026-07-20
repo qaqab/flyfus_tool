@@ -1,4 +1,4 @@
-version: 0.0.26
+version: 0.0.1
 type: plugin
 author: "qaqab"
 name: "flyfus_tool"
@@ -19,7 +19,7 @@ plugins:
   tools:
     - "provider/flyfus_tool.yaml"
 meta:
-  version: 0.0.26
+  version: 0.0.1
   arch:
     - "amd64"
     - "arm64"

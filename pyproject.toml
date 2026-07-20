@@ -1,6 +1,6 @@
 [project]
 name = "flyfus-tool"
-version = "0.0.4"
+version = "0.0.1"
 description = "Dify tools plugin for Flyfus image generation and agent task control."
 readme = "README.md"
 requires-python = ">=3.12"
