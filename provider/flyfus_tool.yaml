@@ -1,8 +1,8 @@
 credentials_for_provider:
   api_key:
     help:
-      en_US: Required for Flypower Tool setup.
-      zh_Hans: Flypower Tool 入口配置必填。
+      en_US: Required for Flyfus Tool setup.
+      zh_Hans: Flyfus Tool 入口配置必填。
     label:
       en_US: API Key
       zh_Hans: API Key
@@ -13,8 +13,8 @@ credentials_for_provider:
     type: secret-input
   endpoint_url:
     help:
-      en_US: Required for Flypower Tool setup.
-      zh_Hans: Flypower Tool 入口配置必填。
+      en_US: Required for Flyfus Tool setup.
+      zh_Hans: Flyfus Tool 入口配置必填。
     label:
       en_US: API endpoint URL
       zh_Hans: API 地址
@@ -122,10 +122,10 @@ credentials_for_provider:
   env:
     help:
       en_US: Optional environment sent to the Skills tool backend.
-      zh_Hans: 可选。Skills 工具后端使用的环境标识。
+      zh_Hans: 可选。Geo 使用的环境标识。
     label:
       en_US: Skills Environment
-      zh_Hans: Skills 环境
+      zh_Hans: Geo 环境
     placeholder:
       en_US: prod
       zh_Hans: prod
@@ -133,23 +133,23 @@ credentials_for_provider:
     type: text-input
 extra:
   python:
-    source: provider/flypower_tool.py
+    source: provider/flyfus_tool.py
 identity:
   author: qaqab
   description:
-    en_US: Flypower tools for generating images and controlling the next agent step.
-    zh_Hans: Flypower 图像生成与下一步 Agent 控制工具。
+    en_US: Flyfus tools for generating images and controlling the next agent step.
+    zh_Hans: Flyfus 图像生成与下一步 Agent 控制工具。
   icon: icon.svg
   label:
-    en_US: Flypower Tool
-    zh_Hans: Flypower 工具
-  name: flypower_tool
+    en_US: Flyfus Tool
+    zh_Hans: Flyfus 工具
+  name: flyfus_tool
   tags:
     - image
     - productivity
     - utilities
 tools:
-  - tools/image/flypower_image_generate.yaml
+  - tools/image/flyfus_image_generate.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
-  - tools/skills/flypower_skills.yaml
+  - tools/skills/flyfus_skills.yaml

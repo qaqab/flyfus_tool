@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from tools.skills.flypower_skills import FlypowerSkillsTool
+from tools.skills.flyfus_skills import FlyfusSkillsTool
 
 
 class FakeResponse:
@@ -15,8 +15,8 @@ class FakeResponse:
         return self._payload
 
 
-def _tool() -> FlypowerSkillsTool:
-    return FlypowerSkillsTool.from_credentials(
+def _tool() -> FlyfusSkillsTool:
+    return FlyfusSkillsTool.from_credentials(
         {
             "geo_url": "https://skills.example",
             "geo_key": "test-token",
@@ -32,7 +32,7 @@ def test_list_skills_returns_content_text(monkeypatch) -> None:
         calls.append((url, kwargs))
         return FakeResponse({"code": 200, "data": {"content": "listing-diagnosis"}})
 
-    monkeypatch.setattr("tools.skills.flypower_skills.requests.post", post)
+    monkeypatch.setattr("tools.skills.flyfus_skills.requests.post", post)
 
     messages = list(_tool().invoke({"method": "list_skills", "agent_name": "listing-agent"}))
 
@@ -58,7 +58,7 @@ def test_load_skill_returns_multiple_rendered_prompts(monkeypatch) -> None:
         reference = kwargs["json"]["text"]
         return FakeResponse({"code": 200, "data": {"rendered_text": f"Prompt for {reference}"}})
 
-    monkeypatch.setattr("tools.skills.flypower_skills.requests.post", post)
+    monkeypatch.setattr("tools.skills.flyfus_skills.requests.post", post)
 
     messages = list(
         _tool().invoke(
@@ -94,7 +94,7 @@ def test_load_skill_requires_skill_name() -> None:
 
 def test_load_skill_accepts_legacy_single_skill_name(monkeypatch) -> None:
     monkeypatch.setattr(
-        "tools.skills.flypower_skills.requests.post",
+        "tools.skills.flyfus_skills.requests.post",
         lambda url, **kwargs: FakeResponse({"code": 200, "data": {"rendered_text": "Prompt"}}),
     )
 
@@ -111,7 +111,7 @@ def test_load_skill_accepts_legacy_single_skill_name(monkeypatch) -> None:
 
 def test_load_skill_accepts_json_array_text(monkeypatch) -> None:
     monkeypatch.setattr(
-        "tools.skills.flypower_skills.requests.post",
+        "tools.skills.flyfus_skills.requests.post",
         lambda url, **kwargs: FakeResponse({"code": 200, "data": {"rendered_text": "Prompt"}}),
     )
 

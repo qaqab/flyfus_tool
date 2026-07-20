@@ -10,7 +10,7 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 
 
 class ReadFileTool(Tool):
-    _TAG_NAME = "FLYPOWER_CONTEXT"
+    _TAG_NAME = "FLYFUS_CONTEXT"
     _INTERNAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "web", "nginx", "api"}
     _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
     _FILE_SUFFIXES = (".pdf", ".md", ".xlsx", ".csv", ".txt", ".html")
@@ -30,7 +30,7 @@ class ReadFileTool(Tool):
 
         context = {
             "version": 1,
-            "type": "flypower_context",
+            "type": "flyfus_context",
             "urls": urls,
         }
         encoded_context = json.dumps(context, ensure_ascii=False, separators=(",", ":"))

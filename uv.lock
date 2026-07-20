@@ -280,7 +280,7 @@ wheels = [
 ]
 
 [[package]]
-name = "flypower-tool"
+name = "flyfus-tool"
 version = "0.0.4"
 source = { virtual = "." }
 dependencies = [

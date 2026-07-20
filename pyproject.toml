@@ -1,7 +1,7 @@
 [project]
-name = "flypower-tool"
+name = "flyfus-tool"
 version = "0.0.4"
-description = "Dify tools plugin for Flypower image generation and agent task control."
+description = "Dify tools plugin for Flyfus image generation and agent task control."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

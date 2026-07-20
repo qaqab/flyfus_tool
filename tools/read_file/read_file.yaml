@@ -6,7 +6,7 @@ identity:
     zh_Hans: 读取文件 URL
 description:
   human:
-    en_US: Convert public URLs into Flypower context for the next model call.
+    en_US: Convert public URLs into Flyfus context for the next model call.
     zh_Hans: |-
       - 需要读取文件的时候使用本工具。
       - 支持以下格式图片： PNG, JPG, JPEG

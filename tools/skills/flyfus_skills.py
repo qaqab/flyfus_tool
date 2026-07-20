@@ -9,7 +9,7 @@ from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
 
 
-class FlypowerSkillsTool(Tool):
+class FlyfusSkillsTool(Tool):
     _REFERENCE_PART_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
     _SKILL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
     _REQUEST_TIMEOUT = (10, 60)

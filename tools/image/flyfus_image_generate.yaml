@@ -1,20 +1,20 @@
 description:
   human:
-    en_US: Generate or edit images with Flypower GPT image models.
-    zh_Hans: 使用 Flypower GPT 图像模型生成或编辑图片。
-  llm: Generate images from text, or edit/reference one or more image URLs, using Flypower GPT image models.
+    en_US: Generate or edit images with Flyfus GPT image models.
+    zh_Hans: 使用 Flyfus GPT 图像模型生成或编辑图片。
+  llm: Generate images from text, or edit/reference one or more image URLs, using Flyfus GPT image models.
 extra:
   python:
-    source: tools/image/flypower_image_generate.py
+    source: tools/image/flyfus_image_generate.py
 identity:
   author: qaqab
   description:
-    en_US: Generate images from prompts and optional reference image URLs through a Flypower OpenAI-compatible endpoint.
-    zh_Hans: 通过 Flypower OpenAI 兼容接口，根据提示词和可选参考图 URL 生成图片。
+    en_US: Generate images from prompts and optional reference image URLs through a Flyfus OpenAI-compatible endpoint.
+    zh_Hans: 通过 Flyfus OpenAI 兼容接口，根据提示词和可选参考图 URL 生成图片。
   label:
-    en_US: Flypower Image Generate
-    zh_Hans: Flypower 图像生成
-  name: flypower_image_generate
+    en_US: Flyfus Image Generate
+    zh_Hans: Flyfus 图像生成
+  name: flyfus_image_generate
 parameters:
 - form: llm
   human_description:

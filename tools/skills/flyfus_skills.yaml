@@ -1,15 +1,15 @@
 identity:
   author: qaqab
-  name: flypower_skills
+  name: flyfus_skills
   label:
-    en_US: Flypower Skills
-    zh_Hans: Flypower 技能
+    en_US: Flyfus Skills
+    zh_Hans: Flyfus 技能
 description:
   human:
     en_US: List an agent's available skills, then load one or more complete skill prompts.
     zh_Hans: 查询 Agent 的可用技能，再加载一个或多个技能的完整提示词。
   llm: |-
-    查询或加载 Flypower Skills。Skills 环境由工具配置决定，不要传入 env。
+    查询或加载 Flyfus Skills。Geo 环境由工具配置决定，不要传入 env。
 
     method=list_skills：
     - 必填参数：agent_name。
@@ -61,4 +61,4 @@ parameters:
       也可每行填写一个名称。
 extra:
   python:
-    source: tools/skills/flypower_skills.py
+    source: tools/skills/flyfus_skills.py

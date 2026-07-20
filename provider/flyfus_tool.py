@@ -10,7 +10,7 @@ from tools.image._image_utils import ModelListRequestError, fetch_openai_model_i
 logger = logging.getLogger(__name__)
 
 
-class FlypowerToolProvider(ToolProvider):
+class FlyfusToolProvider(ToolProvider):
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         endpoint_url = str(credentials.get("endpoint_url") or "").strip()
         api_key = str(credentials.get("api_key") or "").strip()
@@ -43,7 +43,7 @@ class FlypowerToolProvider(ToolProvider):
             raise ToolProviderCredentialValidationError(str(error)) from error
         except ModelListRequestError as error:
             logger.warning(
-                "flypower.model_list_validation_failed category=%s endpoint=%s status_code=%s",
+                "flyfus.model_list_validation_failed category=%s endpoint=%s status_code=%s",
                 error.category,
                 error.endpoint,
                 error.status_code,
