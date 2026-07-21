@@ -50,6 +50,10 @@ parameters:
       zh_Hans: GPT Image 2
     value: gpt-image-2
   - label:
+      en_US: GPT Image 2 4K
+      zh_Hans: GPT Image 2 4K
+    value: gpt-image-2-4k
+  - label:
       en_US: GPT Image 1.5
       zh_Hans: GPT Image 1.5
     value: gpt-image-1.5
@@ -81,35 +85,39 @@ parameters:
   name: mask_url
   required: false
   type: string
-# Temporarily disabled because the current image endpoint ignores their values.
-# - default: auto
-#   form: form
-#   human_description:
-#     en_US: Select the image size.
-#     zh_Hans: 选择图像大小。
-#   label:
-#     en_US: Image Size
-#     zh_Hans: 图像大小
-#   name: size
-#   options:
-#   - label:
-#       en_US: Auto
-#       zh_Hans: 自动
-#     value: auto
-#   - label:
-#       en_US: Square (1024x1024)
-#       zh_Hans: 方形 (1024x1024)
-#     value: "1024x1024"
-#   - label:
-#       en_US: Landscape (1536x1024)
-#       zh_Hans: 横屏/风景 (1536x1024)
-#     value: "1536x1024"
-#   - label:
-#       en_US: Portrait (1024x1536)
-#       zh_Hans: 竖屏/肖像 (1024x1536)
-#     value: "1024x1536"
-#   required: false
-#   type: select
+- default: auto
+  form: form
+  human_description:
+    en_US: Select the image size.
+    zh_Hans: 选择图像大小。
+  label:
+    en_US: Image Size
+    zh_Hans: 图像大小
+  name: size
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Square (1024x1024)
+      zh_Hans: 方形 (1024x1024)
+    value: "1024x1024"
+  - label:
+      en_US: Landscape (1536x1024)
+      zh_Hans: 横屏/风景 (1536x1024)
+    value: "1536x1024"
+  - label:
+      en_US: Portrait (1024x1536)
+      zh_Hans: 竖屏/肖像 (1024x1536)
+    value: "1024x1536"
+  - label:
+      en_US: 4K Landscape (3840x2160)
+      zh_Hans: 4K 横屏 (3840x2160)
+    value: "3840x2160"
+  required: false
+  type: select
+# The current image endpoint only honors size, output_format, and moderation.
 # - default: 1
 #   form: form
 #   human_description:
@@ -151,34 +159,34 @@ parameters:
 #     value: high
 #   required: false
 #   type: select
-# - default: auto
-#   form: form
-#   human_description:
-#     en_US: Output image format.
-#     zh_Hans: 输出图片格式。
-#   label:
-#     en_US: Output Format
-#     zh_Hans: 输出格式
-#   name: output_format
-#   options:
-#   - label:
-#       en_US: Auto
-#       zh_Hans: 自动
-#     value: auto
-#   - label:
-#       en_US: PNG
-#       zh_Hans: PNG
-#     value: png
-#   - label:
-#       en_US: JPEG
-#       zh_Hans: JPEG
-#     value: jpeg
-#   - label:
-#       en_US: WebP
-#       zh_Hans: WebP
-#     value: webp
-#   required: false
-#   type: select
+- default: auto
+  form: form
+  human_description:
+    en_US: Output image format.
+    zh_Hans: 输出图片格式。
+  label:
+    en_US: Output Format
+    zh_Hans: 输出格式
+  name: output_format
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: PNG
+      zh_Hans: PNG
+    value: png
+  - label:
+      en_US: JPEG
+      zh_Hans: JPEG
+    value: jpeg
+  - label:
+      en_US: WebP
+      zh_Hans: WebP
+    value: webp
+  required: false
+  type: select
 # - default: 100
 #   form: form
 #   human_description:
@@ -195,8 +203,8 @@ parameters:
 # - default: auto
 #   form: form
 #   human_description:
-#     en_US: Background mode. Transparent is not supported by gpt-image-2.
-#     zh_Hans: 背景模式。gpt-image-2 不支持透明背景。
+#     en_US: Background mode. Transparent is not supported by GPT Image 2.
+#     zh_Hans: 背景模式。GPT Image 2 不支持透明背景。
 #   label:
 #     en_US: Background
 #     zh_Hans: 背景
@@ -216,23 +224,23 @@ parameters:
 #     value: transparent
 #   required: false
 #   type: select
-# - default: auto
-#   form: form
-#   human_description:
-#     en_US: Moderation level.
-#     zh_Hans: 内容审核级别。
-#   label:
-#     en_US: Moderation
-#     zh_Hans: 内容审核
-#   name: moderation
-#   options:
-#   - label:
-#       en_US: Auto
-#       zh_Hans: 自动
-#     value: auto
-#   - label:
-#       en_US: Low
-#       zh_Hans: 低
-#     value: low
-#   required: false
-#   type: select
+- default: auto
+  form: form
+  human_description:
+    en_US: Moderation level.
+    zh_Hans: 内容审核级别。
+  label:
+    en_US: Moderation
+    zh_Hans: 内容审核
+  name: moderation
+  options:
+  - label:
+      en_US: Auto
+      zh_Hans: 自动
+    value: auto
+  - label:
+      en_US: Low
+      zh_Hans: 低
+    value: low
+  required: false
+  type: select

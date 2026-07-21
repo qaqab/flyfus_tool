@@ -49,6 +49,55 @@ def test_image_generation_returns_urls_as_a_json_array(monkeypatch) -> None:
     assert messages[1].message.text == '["https://cdn.example/image-1.png", "https://cdn.example/image-2.png"]'
 
 
+def test_gpt_image_2_4k_generation_passes_configured_parameters(monkeypatch) -> None:
+    received_args: dict = {}
+
+    class FakeImages:
+        def generate(self, **kwargs):
+            received_args.update(kwargs)
+            return SimpleNamespace(data=[SimpleNamespace(url="https://upstream.example/image-4k.webp")])
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs) -> None:
+            self.images = FakeImages()
+
+    monkeypatch.setattr(
+        "tools.image.flyfus_image_generate.fetch_openai_model_ids",
+        lambda endpoint_url, api_key: {"gpt-image-2-4k"},
+    )
+    monkeypatch.setattr("tools.image.flyfus_image_generate.OpenAI", FakeOpenAI)
+    monkeypatch.setattr(
+        FlyfusImageGenerateTool,
+        "_upload_output_to_oss",
+        staticmethod(lambda upload, **kwargs: "https://cdn.example/image-4k.webp"),
+    )
+
+    tool = FlyfusImageGenerateTool.from_credentials(
+        {"api_key": "test-api-key", "endpoint_url": "https://images.example"}
+    )
+    messages = list(
+        tool.invoke(
+            {
+                "prompt": "4K cloudscape",
+                "model": "gpt-image-2-4k",
+                "size": "3840x2160",
+                "output_format": "webp",
+                "moderation": "low",
+            }
+        )
+    )
+
+    assert received_args == {
+        "model": "gpt-image-2-4k",
+        "prompt": "4K cloudscape",
+        "size": "3840x2160",
+        "n": 1,
+        "output_format": "webp",
+        "moderation": "low",
+    }
+    assert messages[0].message.json_object["urls"] == ["https://cdn.example/image-4k.webp"]
+
+
 def test_image_generation_returns_an_empty_url_array_and_error_on_failure() -> None:
     tool = FlyfusImageGenerateTool.from_credentials({})
     messages = list(tool.invoke({"prompt": "A test image", "model": "gpt-image-2"}))

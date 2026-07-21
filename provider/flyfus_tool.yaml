@@ -141,3 +141,4 @@ tools:
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
   - tools/skills/flyfus_skills.yaml
+  - tools/router/flyfus_tool_router.yaml
