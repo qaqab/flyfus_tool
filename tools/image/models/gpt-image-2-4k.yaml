@@ -1,0 +1,8 @@
+model: gpt-image-2-4k
+label:
+  en_US: GPT Image 2 4K
+  zh_Hans: GPT Image 2 4K
+supported_operations:
+  - generate
+supports_reference_images: false
+supports_mask: false

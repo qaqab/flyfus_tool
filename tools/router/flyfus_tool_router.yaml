@@ -1,0 +1,41 @@
+identity:
+  author: qaqab
+  name: flyfus_tool_router
+  label:
+    en_US: Flyfus Tool Router
+    zh_Hans: Flyfus 工具路由
+description:
+  human:
+    en_US: Lists and concurrently calls the built-in Flyfus tools.
+    zh_Hans: 查询并发调用内置的 Flyfus 工具。
+  llm: |-
+    使用 method=list_tools 查询内置工具及参数；需要执行时使用 method=invoke_tools。
+    invoke_tools 的 tool_calls 是 JSON 数组，每项格式为 {"tool":"工具别名","parameters":{}}。
+    可一次传多个调用，它们会并发执行。不要传 provider 或 tool_name。
+parameters:
+  - name: method
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: list_tools
+        label: {en_US: List Tools, zh_Hans: 查询工具}
+      - value: invoke_tools
+        label: {en_US: Invoke Tools, zh_Hans: 调用工具}
+    label: {en_US: Method, zh_Hans: 操作}
+    human_description:
+      en_US: List the built-in tools or invoke one or more of them.
+      zh_Hans: 查询内置工具，或调用一个或多个内置工具。
+    llm_description: "list_tools 查询固定工具列表；invoke_tools 并发调用工具。"
+  - name: tool_calls
+    type: string
+    required: false
+    form: llm
+    label: {en_US: Tool Calls, zh_Hans: 工具调用列表}
+    human_description:
+      en_US: A JSON array of built-in tool calls, used only with invoke_tools.
+      zh_Hans: 内置工具调用的 JSON 数组，仅在 invoke_tools 时使用。
+    llm_description: '仅 invoke_tools 时必填。示例：[{"tool":"generate_image","parameters":{"prompt":"一只猫"}}]。'
+extra:
+  python:
+    source: tools/router/flyfus_tool_router.py
