@@ -20,7 +20,6 @@ def _tool() -> FlyfusSkillsTool:
         {
             "geo_url": "https://skills.example",
             "geo_key": "test-token",
-            "env": "prod",
         }
     )
 
@@ -40,10 +39,10 @@ def test_list_skills_returns_content_text(monkeypatch) -> None:
     assert messages[0].message.text == "listing-diagnosis"
     assert calls == [
         (
-            "https://skills.example/dify_prompt/skills/list",
+            "https://skills.example/dify_admin/skills/list",
             {
                 "headers": {"Content-Type": "application/json", "Authorization": "Bearer test-token"},
-                "json": {"agent_name": "listing-agent", "env": "prod"},
+                "json": {"agent_name": "listing-agent"},
                 "timeout": (10, 60),
             },
         )
@@ -74,15 +73,15 @@ def test_load_skill_returns_multiple_rendered_prompts(monkeypatch) -> None:
     assert json.loads(messages[0].message.text) == [
         {
             "skill_name": "listing-diagnosis",
-            "skill_prompt": "Prompt for {{geo_prompt:listing-agent.listing-diagnosis@prod}}",
+            "skill_prompt": "Prompt for {{dify_admin:listing-agent.listing-diagnosis}}",
         },
         {
             "skill_name": "listing-optimization",
-            "skill_prompt": "Prompt for {{geo_prompt:listing-agent.listing-optimization@prod}}",
+            "skill_prompt": "Prompt for {{dify_admin:listing-agent.listing-optimization}}",
         },
     ]
     assert len(calls) == 2
-    assert all(call[0] == "https://skills.example/dify_prompt/render" for call in calls)
+    assert all(call[0] == "https://skills.example/dify_admin/render" for call in calls)
 
 
 def test_load_skill_requires_skill_name() -> None:

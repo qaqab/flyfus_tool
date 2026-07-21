@@ -119,18 +119,6 @@ credentials_for_provider:
       zh_Hans: 输入 Skills API Key
     required: false
     type: secret-input
-  env:
-    help:
-      en_US: Optional environment sent to the Skills tool backend.
-      zh_Hans: 可选。Geo 使用的环境标识。
-    label:
-      en_US: Skills Environment
-      zh_Hans: Geo 环境
-    placeholder:
-      en_US: prod
-      zh_Hans: prod
-    required: false
-    type: text-input
 extra:
   python:
     source: provider/flyfus_tool.py

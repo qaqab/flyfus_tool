@@ -9,7 +9,7 @@ description:
     en_US: List an agent's available skills, then load one or more complete skill prompts.
     zh_Hans: 查询 Agent 的可用技能，再加载一个或多个技能的完整提示词。
   llm: |-
-    查询或加载 Flyfus Skills。Geo 环境由工具配置决定，不要传入 env。
+    查询或加载 Flyfus Skills。目标 Geo 服务决定使用的环境。
 
     method=list_skills：
     - 必填参数：agent_name。

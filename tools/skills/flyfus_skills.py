@@ -51,12 +51,12 @@ class FlyfusSkillsTool(Tool):
             yield self.create_text_message(f"Error: {error}")
 
     def _list_skills(self, agent_name: str) -> str:
-        response = self._post("/dify_prompt/skills/list", {"agent_name": agent_name, "env": self._credential("env")})
+        response = self._post("/dify_admin/skills/list", {"agent_name": agent_name})
         return self._response_text(response, "content")
 
     def _load_skill(self, agent_name: str, skill_name: str) -> str:
-        reference = f"{{{{geo_prompt:{agent_name}.{skill_name}@{self._credential('env')}}}}}"
-        response = self._post("/dify_prompt/render", {"type": "skills", "text": reference})
+        reference = f"{{{{dify_admin:{agent_name}.{skill_name}}}}}"
+        response = self._post("/dify_admin/render", {"type": "skills", "text": reference})
         return self._response_text(response, "rendered_text")
 
     @staticmethod
