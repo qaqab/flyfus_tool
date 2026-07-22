@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+import uuid
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -8,6 +10,8 @@ from typing import Any
 import requests
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
+
+from tools._sls_logging import write_tool_log
 
 
 class FlyfusToolRouter(Tool):
@@ -18,29 +22,84 @@ class FlyfusToolRouter(Tool):
     _SUPPORTED_PROVIDER_TYPES = frozenset({"builtin", "api", "workflow"})
 
     def _invoke(self, tool_parameters: dict) -> Generator[ToolInvokeMessage, None, None]:
+        batch_log_id = str(uuid.uuid4())
+        started_at_ms = self._epoch_ms()
+        started_at = time.monotonic()
         method = str(tool_parameters.get("method") or "").strip()
+        self._write_log(
+            batch_log_id,
+            "router_request_received",
+            method=method,
+            started_at_ms=started_at_ms,
+            input_json=self._json_text(tool_parameters),
+        )
         if method not in {"list_tools", "invoke_tools"}:
-            yield self.create_text_message("Error: method must be list_tools or invoke_tools.")
+            error = "method must be list_tools or invoke_tools."
+            self._write_log(
+                batch_log_id,
+                "router_request_finished",
+                method=method,
+                status="error",
+                duration_ms=self._duration_ms(started_at),
+                output_json=self._json_text({"error": error}),
+            )
+            yield self.create_text_message(f"Error: {error}")
             return
-
         try:
             catalog = self._fetch_catalog()
             if method == "list_tools":
+                self._write_log(
+                    batch_log_id,
+                    "router_catalog_loaded",
+                    method=method,
+                    started_at_ms=started_at_ms,
+                    duration_ms=self._duration_ms(started_at),
+                    tool_count=catalog["tool_count"],
+                    output_json=self._json_text(catalog),
+                )
                 yield self.create_json_message(catalog)
                 return
 
             calls = self._parse_calls(tool_parameters.get("tool_calls"), catalog["tools"])
-        except RuntimeError as error:
-            yield self.create_text_message(f"Error: {error}")
-            return
-        except ValueError as error:
+        except (RuntimeError, ValueError) as error:
+            output = {"error": str(error)}
+            self._write_log(
+                batch_log_id,
+                "router_request_finished",
+                method=method,
+                status="error",
+                duration_ms=self._duration_ms(started_at),
+                output_json=self._json_text(output),
+            )
             yield self.create_text_message(f"Error: {error}")
             return
 
         with ThreadPoolExecutor(max_workers=min(len(calls), self._MAX_CALLS)) as executor:
-            futures = [executor.submit(self._invoke_one, call) for call in calls]
+            futures = [
+                executor.submit(self._invoke_one, call, batch_log_id, index)
+                for index, call in enumerate(calls)
+            ]
             results = [future.result() for future in futures]
-        yield self.create_json_message({"results": results})
+        duration_ms = self._duration_ms(started_at)
+        self._write_log(
+            batch_log_id,
+            "router_batch_finished",
+            method=method,
+            started_at_ms=started_at_ms,
+            duration_ms=duration_ms,
+            tool_count=len(calls),
+            success_count=sum(result["status"] == "success" for result in results),
+            error_count=sum(result["status"] == "error" for result in results),
+            result_json=self._json_text(results),
+        )
+        yield self.create_json_message(
+            {
+                "batch_log_id": batch_log_id,
+                "started_at_ms": started_at_ms,
+                "duration_ms": duration_ms,
+                "results": results,
+            }
+        )
 
     def _fetch_catalog(self) -> dict[str, Any]:
         url = f"{self._credential('geo_url').rstrip('/')}/dify_admin/tools/available"
@@ -94,7 +153,30 @@ class FlyfusToolRouter(Tool):
 
         return {"tool_count": len(normalized_tools), "tools": normalized_tools}
 
-    def _invoke_one(self, call: dict[str, Any]) -> dict[str, Any]:
+    def _invoke_one(self, call: dict[str, Any], batch_log_id: str, call_index: int) -> dict[str, Any]:
+        call_log_id = str(uuid.uuid4())
+        started_at_ms = self._epoch_ms()
+        started_at = time.monotonic()
+        self._write_log(
+            call_log_id,
+            "router_call_started",
+            batch_log_id=batch_log_id,
+            call_index=call_index,
+            started_at_ms=started_at_ms,
+            name=call["name"],
+            provider_type=call["provider_type"],
+            provider=call["provider"],
+            tool_name=call["tool_name"],
+            input_json=self._json_text(
+                {
+                    "name": call["name"],
+                    "provider_type": call["provider_type"],
+                    "provider": call["provider"],
+                    "tool_name": call["tool_name"],
+                    "parameters": call["parameters"],
+                }
+            ),
+        )
         try:
             invocation = self.session.tool
             provider_type = call["provider_type"]
@@ -123,13 +205,50 @@ class FlyfusToolRouter(Tool):
                     )
                 )
         except Exception as error:
-            return {"name": call["name"], "status": "error", "error": str(error)}
+            result = {
+                "name": call["name"],
+                "status": "error",
+                "error": str(error),
+                "call_log_id": call_log_id,
+                "started_at_ms": started_at_ms,
+                "duration_ms": self._duration_ms(started_at),
+            }
+            self._write_log(
+                call_log_id,
+                "router_call_finished",
+                batch_log_id=batch_log_id,
+                call_index=call_index,
+                provider_type=call["provider_type"],
+                provider=call["provider"],
+                tool_name=call["tool_name"],
+                status="error",
+                error=str(error),
+                duration_ms=result["duration_ms"],
+                output_json=self._json_text(result),
+            )
+            return result
 
-        return {
+        result = {
             "name": call["name"],
             "status": "success",
             "messages": [self._message_to_dict(message) for message in messages],
+            "call_log_id": call_log_id,
+            "started_at_ms": started_at_ms,
+            "duration_ms": self._duration_ms(started_at),
         }
+        self._write_log(
+            call_log_id,
+            "router_call_finished",
+            batch_log_id=batch_log_id,
+            call_index=call_index,
+            provider_type=call["provider_type"],
+            provider=call["provider"],
+            tool_name=call["tool_name"],
+            status="success",
+            duration_ms=result["duration_ms"],
+            output_json=self._json_text(result["messages"]),
+        )
+        return result
 
     @classmethod
     def _parse_calls(cls, value: object, catalog_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -164,13 +283,22 @@ class FlyfusToolRouter(Tool):
             raise RuntimeError(f"Missing required Tool Router credential: {name}.")
         return value
 
+    def _write_log(self, log_id: str, event: str, **fields: object) -> None:
+        write_tool_log(self.runtime.credentials, log_id, event, **fields)
+
+    @staticmethod
+    def _epoch_ms() -> int:
+        return int(time.time() * 1000)
+
+    @staticmethod
+    def _duration_ms(started_at: float) -> int:
+        return round((time.monotonic() - started_at) * 1000)
+
+    @staticmethod
+    def _json_text(value: object) -> str:
+        return json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
+
     @staticmethod
     def _message_to_dict(message: ToolInvokeMessage) -> dict[str, Any]:
-        result: dict[str, Any] = {"type": message.type.value}
-        if message.type == ToolInvokeMessage.MessageType.JSON:
-            result["data"] = message.message.json_object
-        elif hasattr(message.message, "text"):
-            result["text"] = message.message.text
-        else:
-            result["data"] = repr(message.message)
-        return result
+        # Preserve every SDK message field (including meta and Base64-encoded blobs).
+        return message.model_dump(mode="json")

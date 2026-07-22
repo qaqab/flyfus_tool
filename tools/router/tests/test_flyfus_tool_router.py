@@ -138,3 +138,60 @@ def test_router_rejects_tool_not_returned_by_geo(monkeypatch) -> None:
     )
 
     assert messages[0].message.text == "Error: Each tool call name must be a tool returned by list_tools."
+
+
+def test_router_writes_input_output_and_timing_logs(monkeypatch) -> None:
+    events = []
+    monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
+    monkeypatch.setattr(
+        "tools.router.flyfus_tool_router.write_tool_log",
+        lambda credentials, log_id, event, **fields: events.append((log_id, event, fields)),
+    )
+
+    messages = list(
+        _tool().invoke(
+            {
+                "method": "invoke_tools",
+                "tool_calls": json.dumps(
+                    [{"name": CATALOG_TOOLS[0]["name"], "parameters": {"input": "audit me"}}]
+                ),
+            }
+        )
+    )
+
+    result = messages[0].message.json_object
+    call_started = next(fields for _, event, fields in events if event == "router_call_started")
+    call_finished = next(fields for _, event, fields in events if event == "router_call_finished")
+    batch_finished = next(fields for _, event, fields in events if event == "router_batch_finished")
+    assert json.loads(call_started["input_json"]) == {
+        "name": CATALOG_TOOLS[0]["name"],
+        "provider_type": "workflow",
+        "provider": "workflow-provider",
+        "tool_name": "skill_tool",
+        "parameters": {"input": "audit me"},
+    }
+    assert call_finished["status"] == "success"
+    assert json.loads(call_finished["output_json"])[0]["message"]["text"] == "workflow:skill_tool"
+    assert call_finished["duration_ms"] >= 100
+    assert batch_finished["result_json"]
+    assert result["results"][0]["call_log_id"]
+    assert result["duration_ms"] >= 100
+
+
+def test_router_logs_complete_error_response(monkeypatch) -> None:
+    events = []
+    monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
+    monkeypatch.setattr(
+        "tools.router.flyfus_tool_router.write_tool_log",
+        lambda credentials, log_id, event, **fields: events.append((log_id, event, fields)),
+    )
+
+    messages = list(
+        _tool().invoke({"method": "invoke_tools", "tool_calls": '[{"name":"unknown","parameters":{}}]'})
+    )
+
+    assert messages[0].message.text == "Error: Each tool call name must be a tool returned by list_tools."
+    finished = next(fields for _, event, fields in events if event == "router_request_finished")
+    assert json.loads(finished["output_json"]) == {
+        "error": "Each tool call name must be a tool returned by list_tools."
+    }

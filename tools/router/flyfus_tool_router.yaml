@@ -1,17 +1,20 @@
 identity:
   author: qaqab
-  name: flyfus_tool_router
+  name: flyfus_tool
   label:
-    en_US: Flyfus Tool Router
-    zh_Hans: Flyfus 工具路由
+    en_US: Flyfus Tool
+    zh_Hans: Flyfus Tool
 description:
   human:
-    en_US: Lists Geo-managed Dify tools and concurrently invokes selected tools.
-    zh_Hans: 查询 Geo 管理的 Dify 工具，并发调用选中的工具。
+    en_US: Gets the Geo-managed Dify tool catalog and concurrently runs selected tools.
+    zh_Hans: 获取 Geo 管理的 Dify 工具目录，并发执行选中的工具。
   llm: |-
-    使用 method=list_tools 查询 Geo 提供的 Dify 工具目录及参数；需要执行时使用 method=invoke_tools。
-    invoke_tools 的 tool_calls 是 JSON 数组，每项格式为 {"name":"list_tools 返回的工具 name","parameters":{}}。
-    可一次传多个调用，它们会并发执行。工具必须来自刚刚返回的目录。
+    第一步必须使用 method=list_tools 获取当前可用工具。响应中每个工具包含 name、description、parameters，
+    以及 Dify 反向调用所需的 provider_type、provider、tool_name。
+    需要执行时使用 method=invoke_tools。tool_calls 是 JSON 数组；每项必须使用 list_tools 返回的 name，
+    并按该工具 parameters JSON Schema 填写 parameters。例如：
+    [{"name":"workflow.provider-id.tool-name","parameters":{"input":"任务内容"}}]。
+    可以一次传入多个调用；它们会并发执行。不要编造 name 或参数字段。
 parameters:
   - name: method
     type: select
@@ -19,23 +22,23 @@ parameters:
     form: llm
     options:
       - value: list_tools
-        label: {en_US: List Tools, zh_Hans: 查询工具}
+        label: {en_US: Get Tool Catalog, zh_Hans: 获取工具目录}
       - value: invoke_tools
-        label: {en_US: Invoke Tools, zh_Hans: 调用工具}
-    label: {en_US: Method, zh_Hans: 操作}
+        label: {en_US: Run Tools, zh_Hans: 并发执行工具}
+    label: {en_US: Operation, zh_Hans: 操作}
     human_description:
-      en_US: List Geo-managed tools or invoke one or more of them.
-      zh_Hans: 查询 Geo 管理的工具，或调用一个或多个工具。
-    llm_description: "list_tools 查询动态工具目录；invoke_tools 并发调用目录中的工具。"
+      en_US: Get the current tool catalog, or concurrently run one or more catalog tools.
+      zh_Hans: 获取当前工具目录，或并发执行一个或多个目录中的工具。
+    llm_description: "先用 list_tools 获取动态目录；再用 invoke_tools 并发执行目录中的工具。"
   - name: tool_calls
     type: string
     required: false
     form: llm
     label: {en_US: Tool Calls, zh_Hans: 工具调用列表}
     human_description:
-      en_US: A JSON array of catalog tool calls, used only with invoke_tools.
-      zh_Hans: 工具目录调用的 JSON 数组，仅在 invoke_tools 时使用。
-    llm_description: '仅 invoke_tools 时必填。示例：[{"name":"workflow.provider-id.tool-name","parameters":{"input":"example"}}]。'
+      en_US: A JSON array of calls. Each item uses a name returned by Get Tool Catalog and parameters matching that tool's JSON Schema.
+      zh_Hans: JSON 调用数组。每项使用“获取工具目录”返回的 name，并按该工具 JSON Schema 填写 parameters。
+    llm_description: '仅 invoke_tools 时必填。格式：[ {"name":"目录返回的工具 name","parameters":{"该工具要求的参数":"值"}} ]。可传多个项，Router 会并发执行。'
 extra:
   python:
     source: tools/router/flyfus_tool_router.py
