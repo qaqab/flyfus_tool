@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import Mock
+
+import requests
 
 from tools.skills.flyfus_skills import FlyfusSkillsTool
 
@@ -127,4 +130,37 @@ def test_load_skill_accepts_json_array_text(monkeypatch) -> None:
     assert [item["skill_name"] for item in json.loads(messages[0].message.text)] == [
         "listing-diagnosis",
         "listing-optimization",
+    ]
+
+
+def test_load_skill_retries_and_logs_network_errors(monkeypatch) -> None:
+    post = Mock(
+        side_effect=[
+            requests.ConnectTimeout("first timeout"),
+            requests.ConnectTimeout("second timeout"),
+            FakeResponse({"code": 200, "data": {"rendered_text": "Prompt"}}),
+        ]
+    )
+    sleep = Mock()
+    write_log = Mock()
+    monkeypatch.setattr("tools.skills.flyfus_skills.requests.post", post)
+    monkeypatch.setattr("tools.skills.flyfus_skills.time.sleep", sleep)
+    monkeypatch.setattr("tools.skills.flyfus_skills.write_tool_log", write_log)
+
+    messages = list(
+        _tool().invoke(
+            {"method": "load_skill", "agent_name": "listing-agent", "skill_name": "listing-diagnosis"}
+        )
+    )
+
+    assert json.loads(messages[0].message.text) == [{"skill_name": "listing-diagnosis", "skill_prompt": "Prompt"}]
+    assert post.call_count == 3
+    assert sleep.call_args_list == [((10,), {}), ((10,), {})]
+    assert [call.args[2] for call in write_log.call_args_list] == [
+        "skills_request_attempt_started",
+        "skills_request_retry",
+        "skills_request_attempt_started",
+        "skills_request_retry",
+        "skills_request_attempt_started",
+        "skills_request_succeeded",
     ]

@@ -2,19 +2,26 @@ from __future__ import annotations
 
 import json
 import re
+import time
+import uuid
 from collections.abc import Generator
 
 import requests
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
 
+from tools._sls_logging import write_tool_log
+
 
 class FlyfusSkillsTool(Tool):
     _REFERENCE_PART_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
     _SKILL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
     _REQUEST_TIMEOUT = (10, 60)
+    _REQUEST_ATTEMPTS = 3
+    _RETRY_DELAY_SECONDS = 10
 
     def _invoke(self, tool_parameters: dict) -> Generator[ToolInvokeMessage, None, None]:
+        log_id = str(uuid.uuid4())
         method = str(tool_parameters.get("method") or "").strip()
         agent_name = str(tool_parameters.get("agent_name") or "").strip()
 
@@ -27,7 +34,7 @@ class FlyfusSkillsTool(Tool):
 
         try:
             if method == "list_skills":
-                yield self.create_text_message(self._list_skills(agent_name))
+                yield self.create_text_message(self._list_skills(agent_name, log_id))
                 return
 
             skill_names_value = tool_parameters.get("skill_names")
@@ -43,20 +50,23 @@ class FlyfusSkillsTool(Tool):
                 )
                 return
             skills = [
-                {"skill_name": skill_name, "skill_prompt": self._load_skill(agent_name, skill_name)}
+                {
+                    "skill_name": skill_name,
+                    "skill_prompt": self._load_skill(agent_name, skill_name, log_id),
+                }
                 for skill_name in skill_names
             ]
             yield self.create_text_message(json.dumps(skills, ensure_ascii=False))
         except RuntimeError as error:
             yield self.create_text_message(f"Error: {error}")
 
-    def _list_skills(self, agent_name: str) -> str:
-        response = self._post("/dify_admin/skills/list", {"agent_name": agent_name})
+    def _list_skills(self, agent_name: str, log_id: str) -> str:
+        response = self._post("/dify_admin/skills/list", {"agent_name": agent_name}, log_id)
         return self._response_text(response, "content")
 
-    def _load_skill(self, agent_name: str, skill_name: str) -> str:
+    def _load_skill(self, agent_name: str, skill_name: str, log_id: str) -> str:
         reference = f"{{{{dify_admin:{agent_name}.{skill_name}}}}}"
-        response = self._post("/dify_admin/render", {"type": "skills", "text": reference})
+        response = self._post("/dify_admin/render", {"type": "skills", "text": reference}, log_id)
         return self._response_text(response, "rendered_text")
 
     @staticmethod
@@ -90,24 +100,70 @@ class FlyfusSkillsTool(Tool):
                 skill_names.append(skill_name)
         return skill_names
 
-    def _post(self, path: str, payload: dict) -> requests.Response:
+    def _post(self, path: str, payload: dict, log_id: str) -> requests.Response:
         url = f"{self._credential('geo_url').rstrip('/')}{path}"
-        try:
-            response = requests.post(
-                url,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._credential('geo_key')}",
-                },
-                json=payload,
-                timeout=self._REQUEST_TIMEOUT,
+        for attempt in range(1, self._REQUEST_ATTEMPTS + 1):
+            self._write_log(
+                log_id,
+                "request_attempt_started",
+                path=path,
+                attempt=attempt,
+                max_attempts=self._REQUEST_ATTEMPTS,
             )
-        except requests.RequestException as error:
-            raise RuntimeError(f"Skills request failed: {error}") from error
+            try:
+                response = requests.post(
+                    url,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self._credential('geo_key')}",
+                    },
+                    json=payload,
+                    timeout=self._REQUEST_TIMEOUT,
+                )
+                break
+            except requests.RequestException as error:
+                if attempt == self._REQUEST_ATTEMPTS:
+                    self._write_log(
+                        log_id,
+                        "request_failed",
+                        path=path,
+                        attempt=attempt,
+                        max_attempts=self._REQUEST_ATTEMPTS,
+                        error_type=type(error).__name__,
+                    )
+                    raise RuntimeError(f"Skills request failed after {attempt} attempts: {error}") from error
+                self._write_log(
+                    log_id,
+                    "request_retry",
+                    path=path,
+                    attempt=attempt,
+                    max_attempts=self._REQUEST_ATTEMPTS,
+                    retry_delay_seconds=self._RETRY_DELAY_SECONDS,
+                    error_type=type(error).__name__,
+                )
+                time.sleep(self._RETRY_DELAY_SECONDS)
 
         if response.status_code != 200:
+            self._write_log(
+                log_id,
+                "request_failed",
+                path=path,
+                attempt=attempt,
+                max_attempts=self._REQUEST_ATTEMPTS,
+                status_code=response.status_code,
+            )
             raise RuntimeError(f"Skills request failed with status {response.status_code}: {response.text}")
+        self._write_log(
+            log_id,
+            "request_succeeded",
+            path=path,
+            attempt=attempt,
+            status_code=response.status_code,
+        )
         return response
+
+    def _write_log(self, log_id: str, event: str, **fields: object) -> None:
+        write_tool_log(self.runtime.credentials, log_id, f"skills_{event}", **fields)
 
     @staticmethod
     def _response_text(response: requests.Response, field: str) -> str:
