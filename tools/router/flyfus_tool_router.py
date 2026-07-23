@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import json
 import time
+import traceback
 import uuid
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -157,6 +159,10 @@ class FlyfusToolRouter(Tool):
         call_log_id = str(uuid.uuid4())
         started_at_ms = self._epoch_ms()
         started_at = time.monotonic()
+        session = self.session
+        session_id = getattr(session, "session_id", None)
+        invocation_started_at_ms: int | None = None
+        first_response_at_ms: int | None = None
         self._write_log(
             call_log_id,
             "router_call_started",
@@ -178,39 +184,47 @@ class FlyfusToolRouter(Tool):
             ),
         )
         try:
-            invocation = self.session.tool
+            invocation = session.tool
             provider_type = call["provider_type"]
             if provider_type == "builtin":
-                messages = list(
-                    invocation.invoke_builtin_tool(
-                        provider=call["provider"],
-                        tool_name=call["tool_name"],
-                        parameters=call["parameters"],
-                    )
+                response_stream = invocation.invoke_builtin_tool(
+                    provider=call["provider"],
+                    tool_name=call["tool_name"],
+                    parameters=call["parameters"],
                 )
             elif provider_type == "workflow":
-                messages = list(
-                    invocation.invoke_workflow_tool(
-                        provider=call["provider"],
-                        tool_name=call["tool_name"],
-                        parameters=call["parameters"],
-                    )
+                response_stream = invocation.invoke_workflow_tool(
+                    provider=call["provider"],
+                    tool_name=call["tool_name"],
+                    parameters=call["parameters"],
                 )
             else:
-                messages = list(
-                    invocation.invoke_api_tool(
-                        provider=call["provider"],
-                        tool_name=call["tool_name"],
-                        parameters=call["parameters"],
-                    )
+                response_stream = invocation.invoke_api_tool(
+                    provider=call["provider"],
+                    tool_name=call["tool_name"],
+                    parameters=call["parameters"],
                 )
+            messages: list[ToolInvokeMessage] = []
+            invocation_started_at_ms = self._epoch_ms()
+            for message in response_stream:
+                if first_response_at_ms is None:
+                    first_response_at_ms = self._epoch_ms()
+                messages.append(message)
         except Exception as error:
+            error_details = self._error_details(error)
             result = {
                 "name": call["name"],
                 "status": "error",
                 "error": str(error),
                 "call_log_id": call_log_id,
                 "started_at_ms": started_at_ms,
+                "invocation_started_at_ms": invocation_started_at_ms,
+                "first_response_at_ms": first_response_at_ms,
+                "first_response_delay_ms": (
+                    first_response_at_ms - invocation_started_at_ms
+                    if first_response_at_ms is not None and invocation_started_at_ms is not None
+                    else None
+                ),
                 "duration_ms": self._duration_ms(started_at),
             }
             self._write_log(
@@ -223,8 +237,13 @@ class FlyfusToolRouter(Tool):
                 tool_name=call["tool_name"],
                 status="error",
                 error=str(error),
+                error_json=self._json_text(error_details),
+                session_id=session_id,
+                invocation_started_at_ms=invocation_started_at_ms,
+                first_response_at_ms=first_response_at_ms,
+                first_response_delay_ms=result["first_response_delay_ms"],
                 duration_ms=result["duration_ms"],
-                output_json=self._json_text(result),
+                output_json=self._json_text({**result, "error_details": error_details}),
             )
             return result
 
@@ -234,6 +253,13 @@ class FlyfusToolRouter(Tool):
             "messages": [self._message_to_dict(message) for message in messages],
             "call_log_id": call_log_id,
             "started_at_ms": started_at_ms,
+            "invocation_started_at_ms": invocation_started_at_ms,
+            "first_response_at_ms": first_response_at_ms,
+            "first_response_delay_ms": (
+                first_response_at_ms - invocation_started_at_ms if first_response_at_ms is not None else None
+            ),
+            "last_response_at_ms": self._epoch_ms() if messages else None,
+            "message_count": len(messages),
             "duration_ms": self._duration_ms(started_at),
         }
         self._write_log(
@@ -245,6 +271,12 @@ class FlyfusToolRouter(Tool):
             provider=call["provider"],
             tool_name=call["tool_name"],
             status="success",
+            session_id=session_id,
+            invocation_started_at_ms=invocation_started_at_ms,
+            first_response_at_ms=first_response_at_ms,
+            first_response_delay_ms=result["first_response_delay_ms"],
+            last_response_at_ms=result["last_response_at_ms"],
+            message_count=result["message_count"],
             duration_ms=result["duration_ms"],
             output_json=self._json_text(result["messages"]),
         )
@@ -296,7 +328,73 @@ class FlyfusToolRouter(Tool):
 
     @staticmethod
     def _json_text(value: object) -> str:
-        return json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
+        return json.dumps(value, ensure_ascii=False, default=FlyfusToolRouter._json_default, separators=(",", ":"))
+
+    @staticmethod
+    def _json_default(value: object) -> object:
+        if isinstance(value, bytes):
+            return {"encoding": "base64", "data": base64.b64encode(value).decode("ascii")}
+        return str(value)
+
+    @classmethod
+    def _error_details(cls, error: Exception) -> dict[str, Any]:
+        chain: list[dict[str, Any]] = []
+        current: BaseException | None = error
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            detail: dict[str, Any] = {
+                "type": type(current).__name__,
+                "message": str(current),
+                "repr": repr(current),
+            }
+            errors = getattr(current, "errors", None)
+            if callable(errors):
+                try:
+                    detail["validation_errors"] = errors()
+                except Exception as nested_error:
+                    detail["validation_errors_error"] = repr(nested_error)
+            for name in ("execution_id", "workflow_run_id", "task_id", "request_id", "backwards_request_id"):
+                found, value = cls._safe_getattr(current, name)
+                if found:
+                    detail[name] = value
+            found, response = cls._safe_getattr(current, "response")
+            if found:
+                detail["http_response"] = cls._http_response_details(response)
+            chain.append(detail)
+            current = current.__cause__ or current.__context__
+        return {
+            "exception_chain": chain,
+            "traceback": "".join(traceback.format_exception(error)),
+            "sdk_exposes_backwards_request_id": False,
+        }
+
+    @staticmethod
+    def _http_response_details(response: object) -> dict[str, Any]:
+        details: dict[str, Any] = {}
+        for name in ("status_code", "reason_phrase", "url"):
+            found, value = FlyfusToolRouter._safe_getattr(response, name)
+            if found:
+                details[name] = value
+        found, headers = FlyfusToolRouter._safe_getattr(response, "headers")
+        if found:
+            try:
+                details["headers"] = dict(headers)
+            except Exception as error:
+                details["headers_read_error"] = repr(error)
+        for name in ("text", "content"):
+            found, value = FlyfusToolRouter._safe_getattr(response, name)
+            if found:
+                details["body" if name == "text" else "body_bytes"] = value
+        return details
+
+    @staticmethod
+    def _safe_getattr(value: object, name: str) -> tuple[bool, object | None]:
+        try:
+            result = getattr(value, name, None)
+        except Exception as error:
+            return True, {"read_error": repr(error)}
+        return result is not None, result
 
     @staticmethod
     def _message_to_dict(message: ToolInvokeMessage) -> dict[str, Any]:

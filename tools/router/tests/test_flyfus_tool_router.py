@@ -69,6 +69,28 @@ class FakeToolInvocation:
         )
 
 
+class FakeHttpResponse:
+    status_code = 524
+    reason_phrase = "A timeout occurred"
+    url = "https://cloud.dify.ai/backwards-invocation/transaction"
+    headers = {"x-request-id": "cloud-request-123"}
+    text = "<!DOCTYPE html><title>timeout</title>"
+
+
+class ReverseInvocationError(Exception):
+    def __init__(self) -> None:
+        super().__init__("reverse invocation failed")
+        self.execution_id = "workflow-run-123"
+        self.backwards_request_id = "backwards-123"
+        self.response = FakeHttpResponse()
+
+
+class FailingToolInvocation(FakeToolInvocation):
+    def _invoke(self, provider_type: str, provider: str, tool_name: str, parameters: dict):
+        raise ReverseInvocationError()
+        yield  # pragma: no cover
+
+
 def _tool() -> FlyfusToolRouter:
     tool = FlyfusToolRouter.from_credentials({"geo_url": "https://geo.example/api/geo/v2", "geo_key": "test-key"})
     tool.session.tool = FakeToolInvocation()
@@ -195,3 +217,37 @@ def test_router_logs_complete_error_response(monkeypatch) -> None:
     assert json.loads(finished["output_json"]) == {
         "error": "Each tool call name must be a tool returned by list_tools."
     }
+
+
+def test_router_logs_reverse_invocation_diagnostics(monkeypatch) -> None:
+    events = []
+    monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
+    monkeypatch.setattr(
+        "tools.router.flyfus_tool_router.write_tool_log",
+        lambda credentials, log_id, event, **fields: events.append((log_id, event, fields)),
+    )
+    tool = _tool()
+    tool.session.tool = FailingToolInvocation()
+
+    result = list(
+        tool.invoke(
+            {
+                "method": "invoke_tools",
+                "tool_calls": json.dumps([{"name": CATALOG_TOOLS[0]["name"], "parameters": {"input": "audit me"}}]),
+            }
+        )
+    )[0].message.json_object["results"][0]
+
+    assert result["error"] == "reverse invocation failed"
+    finished = next(fields for _, event, fields in events if event == "router_call_finished")
+    details = json.loads(finished["error_json"])
+    assert details["exception_chain"][0]["execution_id"] == "workflow-run-123"
+    assert details["exception_chain"][0]["backwards_request_id"] == "backwards-123"
+    assert details["exception_chain"][0]["http_response"] == {
+        "status_code": 524,
+        "reason_phrase": "A timeout occurred",
+        "url": "https://cloud.dify.ai/backwards-invocation/transaction",
+        "headers": {"x-request-id": "cloud-request-123"},
+        "body": "<!DOCTYPE html><title>timeout</title>",
+    }
+    assert json.loads(finished["output_json"])["error_details"] == details
