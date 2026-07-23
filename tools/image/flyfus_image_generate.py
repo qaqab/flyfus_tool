@@ -143,6 +143,10 @@ class FlyfusImageGenerateTool(Tool):
                     model=model,
                     operation=operation,
                     parameters=self._request_parameter_summary(args),
+                    upstream_endpoint=f"{normalized_base_url}/images/edits",
+                    upstream_request_body=self._bounded_log_json(
+                        {**args, "reference_image_urls": reference_urls, "mask_url": mask_url}
+                    ),
                     **request_context,
                 )
                 response = self._run_image_request_with_retry(
@@ -189,6 +193,8 @@ class FlyfusImageGenerateTool(Tool):
                     model=model,
                     operation=operation,
                     parameters=self._request_parameter_summary(args),
+                    upstream_endpoint=f"{normalized_base_url}/images/generations",
+                    upstream_request_body=self._bounded_log_json(args),
                     **request_context,
                 )
                 response = self._run_image_request_with_retry(
@@ -237,6 +243,7 @@ class FlyfusImageGenerateTool(Tool):
             elapsed_ms=self._elapsed_ms(started_at),
             image_count=len(getattr(response, "data", [])),
             upstream_request_id=getattr(response, "_request_id", None) or "-",
+            **self._response_log_fields(response),
             **request_context,
         )
 
@@ -262,6 +269,7 @@ class FlyfusImageGenerateTool(Tool):
                 operation=operation,
                 elapsed_ms=self._elapsed_ms(started_at),
                 upstream_request_id=getattr(response, "_request_id", None) or "-",
+                **self._response_log_fields(response),
                 **request_context,
             )
             yield from fail("The image model did not return any images.", "response_processing")
@@ -359,6 +367,44 @@ class FlyfusImageGenerateTool(Tool):
         return json.dumps({key: value for key, value in args.items() if key != "prompt"}, ensure_ascii=True, sort_keys=True)
 
     @staticmethod
+    def _bounded_log_json(value: object) -> str:
+        """Serialize reproducibility data while keeping a single SLS field bounded."""
+        encoded = json.dumps(FlyfusImageGenerateTool._redact_large_image_data(value), ensure_ascii=False, sort_keys=True, default=str)
+        if len(encoded) <= 32_000:
+            return encoded
+        return json.dumps(
+            {
+                "truncated": True,
+                "original_characters": len(encoded),
+                "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+                "preview": encoded[:31_000],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def _redact_large_image_data(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                key: FlyfusImageGenerateTool._image_data_log_value(item) if key == "b64_json" else FlyfusImageGenerateTool._redact_large_image_data(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [FlyfusImageGenerateTool._redact_large_image_data(item) for item in value]
+        return value
+
+    @staticmethod
+    def _image_data_log_value(value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return {
+            "omitted": True,
+            "characters": len(value),
+            "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        }
+
+    @staticmethod
     def _error_log_fields(error: Exception | None) -> dict[str, object]:
         if error is None:
             return {}
@@ -370,6 +416,58 @@ class FlyfusImageGenerateTool(Tool):
         request_id = getattr(error, "request_id", None) or getattr(response, "_request_id", None)
         if request_id:
             fields["upstream_request_id"] = request_id
+        return fields
+
+    @staticmethod
+    def _response_log_fields(response: object) -> dict[str, object]:
+        """Return structural response diagnostics without logging image content."""
+        data = getattr(response, "data", None)
+        fields: dict[str, object] = {
+            "response_type": type(response).__name__,
+            "response_data_type": type(data).__name__,
+        }
+        try:
+            fields["response_data_count"] = len(data)
+        except TypeError:
+            pass
+
+        model_dump = getattr(response, "model_dump", None)
+        if callable(model_dump):
+            try:
+                dumped = model_dump()
+            except (TypeError, ValueError):
+                dumped = None
+            if isinstance(dumped, dict):
+                fields["response_fields"] = ",".join(sorted(dumped)) or "-"
+                fields["upstream_response_body"] = FlyfusImageGenerateTool._bounded_log_json(dumped)
+                fields["upstream_response_body_source"] = "sdk_parsed"
+        elif hasattr(response, "__dict__"):
+            dumped = {key: value for key, value in vars(response).items() if key != "_response"}
+            fields["response_fields"] = ",".join(sorted(dumped)) or "-"
+            fields["upstream_response_body"] = FlyfusImageGenerateTool._bounded_log_json(dumped)
+            fields["upstream_response_body_source"] = "sdk_parsed"
+
+        if isinstance(data, (list, tuple)) and data:
+            first_item = data[0]
+            item_dump = getattr(first_item, "model_dump", None)
+            if callable(item_dump):
+                try:
+                    dumped_item = item_dump()
+                except (TypeError, ValueError):
+                    dumped_item = None
+                if isinstance(dumped_item, dict):
+                    fields["response_first_image_fields"] = ",".join(sorted(dumped_item)) or "-"
+            elif hasattr(first_item, "__dict__"):
+                fields["response_first_image_fields"] = ",".join(sorted(vars(first_item))) or "-"
+
+        http_response = getattr(response, "_response", None)
+        status_code = getattr(http_response, "status_code", None)
+        if status_code is not None:
+            fields["upstream_status_code"] = status_code
+        headers = getattr(http_response, "headers", {}) or {}
+        request_id = headers.get("x-request-id") or headers.get("request-id")
+        if request_id:
+            fields["upstream_header_request_id"] = request_id
         return fields
 
     @staticmethod
@@ -473,6 +571,13 @@ class FlyfusImageGenerateTool(Tool):
             request_id_detail = f" (request_id={request_id})" if request_id else ""
             raise RuntimeError(f"OSS upload returned HTTP {response.status_code}{request_id_detail} (log_id={log_id}){detail}")
 
+        try:
+            response_body = response.json()
+            public_url = response_body["data"]["public_url"]
+        except (KeyError, TypeError, ValueError, requests.JSONDecodeError):
+            raise RuntimeError("OSS upload returned an invalid response") from None
+        if not isinstance(public_url, str) or not public_url:
+            raise RuntimeError("OSS upload returned an invalid public URL")
         self._write_oss_log(
             log_id,
             "succeeded",
@@ -482,17 +587,13 @@ class FlyfusImageGenerateTool(Tool):
             mime_type=mime_type or "-",
             payload_size=payload_size,
             payload_sha256=payload_sha256,
+            source_url=str(payload) if upload_type == "url" else "-",
+            response_body=self._bounded_log_json(response_body),
+            public_url=public_url,
             status_code=response.status_code,
             elapsed_ms=elapsed_ms,
             request_id=request_id or "-",
         )
-        try:
-            response_body = response.json()
-            public_url = response_body["data"]["public_url"]
-        except (KeyError, TypeError, ValueError, requests.JSONDecodeError):
-            raise RuntimeError("OSS upload returned an invalid response") from None
-        if not isinstance(public_url, str) or not public_url:
-            raise RuntimeError("OSS upload returned an invalid public URL")
         return public_url
 
     def _write_oss_log(self, log_id: str, event: str, **fields: object) -> None:
@@ -592,13 +693,13 @@ class FlyfusImageGenerateTool(Tool):
         FlyfusImageGenerateTool._validate_http_url(url)
         started_at = time.monotonic()
         if on_event:
-            on_event("started", input_kind=input_kind, index=index)
+            on_event("started", input_kind=input_kind, index=index, source_url=url)
         if url.startswith("data:image/"):
             mime_type, image_data = decode_image(url)
             image_file = io.BytesIO(image_data)
             image_file.name = f"{default_name}{FlyfusImageGenerateTool._extension_for_mime_type(mime_type)}"
             if on_event:
-                on_event("succeeded", input_kind=input_kind, index=index, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), payload_size=len(image_data), content_type=mime_type)
+                on_event("succeeded", input_kind=input_kind, index=index, source_url=url, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), payload_size=len(image_data), content_type=mime_type, payload_sha256=hashlib.sha256(image_data).hexdigest())
             return image_file
 
         try:
@@ -626,10 +727,10 @@ class FlyfusImageGenerateTool(Tool):
             image_file.name = f"{default_name}{FlyfusImageGenerateTool._guess_extension(url, content_type)}"
         except Exception as error:
             if on_event:
-                on_event("failed", input_kind=input_kind, index=index, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), exception_type=type(error).__name__)
+                on_event("failed", input_kind=input_kind, index=index, source_url=url, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), exception_type=type(error).__name__)
             raise
         if on_event:
-            on_event("succeeded", input_kind=input_kind, index=index, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), payload_size=downloaded, content_type=content_type or "-")
+            on_event("succeeded", input_kind=input_kind, index=index, source_url=url, elapsed_ms=FlyfusImageGenerateTool._elapsed_ms(started_at), payload_size=downloaded, content_type=content_type or "-", payload_sha256=hashlib.sha256(image_file.getvalue()).hexdigest())
         return image_file
 
     @staticmethod

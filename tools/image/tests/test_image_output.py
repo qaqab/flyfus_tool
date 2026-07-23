@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from dify_plugin.entities.tool import ToolInvokeMessage
@@ -188,7 +189,14 @@ def test_image_generation_logs_empty_upstream_responses(monkeypatch) -> None:
 
     class FakeImages:
         def generate(self, **kwargs):
-            return SimpleNamespace(data=[], _request_id="upstream-empty-response")
+            return SimpleNamespace(
+                data=[],
+                _request_id="upstream-empty-response",
+                _response=SimpleNamespace(
+                    status_code=200,
+                    headers={"x-request-id": "upstream-header-request-id"},
+                ),
+            )
 
     class FakeOpenAI:
         def __init__(self, **kwargs) -> None:
@@ -211,6 +219,13 @@ def test_image_generation_logs_empty_upstream_responses(monkeypatch) -> None:
 
     response_empty = next(fields for event, fields in events if event == "image_response_empty")
     assert response_empty["upstream_request_id"] == "upstream-empty-response"
+    assert response_empty["response_type"] == "SimpleNamespace"
+    assert response_empty["response_data_type"] == "list"
+    assert response_empty["response_data_count"] == 0
+    assert json.loads(response_empty["upstream_response_body"]) == {"_request_id": "upstream-empty-response", "data": []}
+    assert response_empty["upstream_response_body_source"] == "sdk_parsed"
+    assert response_empty["upstream_status_code"] == 200
+    assert response_empty["upstream_header_request_id"] == "upstream-header-request-id"
     assert response_empty["request_fingerprint"]
     assert messages[0].message.json_object["urls"] == []
     assert messages[0].message.json_object["error"] == "The image model did not return any images."
