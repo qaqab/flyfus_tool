@@ -152,6 +152,22 @@ def test_router_invokes_catalog_tools_in_parallel(monkeypatch) -> None:
     assert {call[0] for call in tool.session.tool.calls} == {"builtin", "workflow", "api"}
 
 
+def test_router_emits_minimal_heartbeats_for_slow_calls(monkeypatch) -> None:
+    monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
+    monkeypatch.setattr(FlyfusToolRouter, "_HEARTBEAT_SECONDS", 0.02)
+    messages = list(
+        _tool().invoke(
+            {
+                "method": "invoke_tools",
+                "tool_calls": json.dumps([{"name": CATALOG_TOOLS[0]["name"], "parameters": {"input": "one"}}]),
+            }
+        )
+    )
+
+    assert any(message.message.text == "." for message in messages[:-1])
+    assert messages[-1].message.json_object["results"][0]["status"] == "success"
+
+
 def test_router_rejects_tool_not_returned_by_geo(monkeypatch) -> None:
     monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
 

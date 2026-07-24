@@ -6,7 +6,7 @@ import time
 import traceback
 import uuid
 from collections.abc import Generator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any
 
 import requests
@@ -20,6 +20,7 @@ class FlyfusToolRouter(Tool):
     """Load Geo's Dify tool catalog and reverse-invoke selected tools."""
 
     _MAX_CALLS = 8
+    _HEARTBEAT_SECONDS = 5
     _REQUEST_TIMEOUT = (10, 60)
     _SUPPORTED_PROVIDER_TYPES = frozenset({"builtin", "api", "workflow"})
 
@@ -81,6 +82,11 @@ class FlyfusToolRouter(Tool):
                 executor.submit(self._invoke_one, call, batch_log_id, index)
                 for index, call in enumerate(calls)
             ]
+            pending = set(futures)
+            while pending:
+                _, pending = wait(pending, timeout=self._HEARTBEAT_SECONDS)
+                if pending:
+                    yield self.create_text_message(".")
             results = [future.result() for future in futures]
         duration_ms = self._duration_ms(started_at)
         self._write_log(
