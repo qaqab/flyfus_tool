@@ -4,4 +4,4 @@
 
 - 插件包在 GitHub Releases 的 Assets 中。
 - Dify 安装地址：https://github.com/qaqab/flyfus_tool
-- 当前发布版本：0.0.11
+- 当前发布版本：0.0.12
