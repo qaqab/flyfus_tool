@@ -48,6 +48,7 @@ class FakeResponse:
 class FakeToolInvocation:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, str, dict]] = []
+        self.events: list[str] = []
         self._lock = threading.Lock()
 
     def invoke_builtin_tool(self, provider: str, tool_name: str, parameters: dict):
@@ -62,7 +63,10 @@ class FakeToolInvocation:
     def _invoke(self, provider_type: str, provider: str, tool_name: str, parameters: dict):
         with self._lock:
             self.calls.append((provider_type, provider, tool_name, parameters))
+            self.events.append(f"start:{tool_name}")
         time.sleep(0.1)
+        with self._lock:
+            self.events.append(f"finish:{tool_name}")
         yield ToolInvokeMessage(
             type=ToolInvokeMessage.MessageType.TEXT,
             message=ToolInvokeMessage.TextMessage(text=f"{provider_type}:{tool_name}"),
@@ -124,10 +128,9 @@ def test_router_lists_geo_catalog(monkeypatch) -> None:
     ]
 
 
-def test_router_invokes_catalog_tools_in_parallel(monkeypatch) -> None:
+def test_router_invokes_catalog_tools_in_parallel_without_heartbeats(monkeypatch) -> None:
     monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
     tool = _tool()
-    started_at = time.monotonic()
     messages = list(
         tool.invoke(
             {
@@ -143,29 +146,19 @@ def test_router_invokes_catalog_tools_in_parallel(monkeypatch) -> None:
         )
     )
 
-    assert time.monotonic() - started_at < 0.18
+    assert len(messages) == 1
     assert [item["status"] for item in messages[0].message.json_object["results"]] == [
         "success",
         "success",
         "success",
     ]
     assert {call[0] for call in tool.session.tool.calls} == {"builtin", "workflow", "api"}
-
-
-def test_router_emits_minimal_heartbeats_for_slow_calls(monkeypatch) -> None:
-    monkeypatch.setattr("tools.router.flyfus_tool_router.requests.post", lambda url, **kwargs: FakeResponse())
-    monkeypatch.setattr(FlyfusToolRouter, "_HEARTBEAT_SECONDS", 0.02)
-    messages = list(
-        _tool().invoke(
-            {
-                "method": "invoke_tools",
-                "tool_calls": json.dumps([{"name": CATALOG_TOOLS[0]["name"], "parameters": {"input": "one"}}]),
-            }
-        )
-    )
-
-    assert any(message.message.text == "." for message in messages[:-1])
-    assert messages[-1].message.json_object["results"][0]["status"] == "success"
+    first_finish = next(index for index, event in enumerate(tool.session.tool.events) if event.startswith("finish:"))
+    assert set(tool.session.tool.events[:first_finish]) == {
+        "start:skill_tool",
+        "start:read_tool",
+        "start:search_tool",
+    }
 
 
 def test_router_rejects_tool_not_returned_by_geo(monkeypatch) -> None:
