@@ -37,6 +37,7 @@ OSS_UPLOAD_TIMEOUT = (10.0, 120.0)
 MAX_OSS_UPLOAD_WORKERS = 4
 MAX_IMAGE_REQUEST_RETRIES = 3
 MAX_OSS_UPLOAD_RETRIES = 2
+SENSITIVE_RESPONSE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization", "set-cookie", "x-api-key"})
 
 
 class FlyfusImageGenerateTool(Tool):
@@ -150,13 +151,15 @@ class FlyfusImageGenerateTool(Tool):
                     **request_context,
                 )
                 response = self._run_image_request_with_retry(
-                    lambda: self._edit_images_with_files(
-                        client,
-                        args,
-                        reference_urls,
-                        mask_url,
-                        on_download_event=lambda event, **fields: self._write_invocation_log(
-                            log_id, f"reference_download_{event}", model=model, operation=operation, **request_context, **fields
+                    lambda: self._require_image_data(
+                        self._edit_images_with_files(
+                            client,
+                            args,
+                            reference_urls,
+                            mask_url,
+                            on_download_event=lambda event, **fields: self._write_invocation_log(
+                                log_id, f"reference_download_{event}", model=model, operation=operation, **request_context, **fields
+                            ),
                         ),
                     ),
                     on_attempt_started=lambda attempt: self._write_invocation_log(
@@ -198,7 +201,7 @@ class FlyfusImageGenerateTool(Tool):
                     **request_context,
                 )
                 response = self._run_image_request_with_retry(
-                    lambda: client.images.generate(**args),
+                    lambda: self._require_image_data(client.images.generate(**args)),
                     on_attempt_started=lambda attempt: self._write_invocation_log(
                         log_id, "request_attempt_started", model=model, operation=operation, attempt=attempt, **request_context
                     ),
@@ -241,7 +244,7 @@ class FlyfusImageGenerateTool(Tool):
             model=model,
             operation=operation,
             elapsed_ms=self._elapsed_ms(started_at),
-            image_count=len(getattr(response, "data", [])),
+            image_count=len(getattr(response, "data", []) or []),
             upstream_request_id=getattr(response, "_request_id", None) or "-",
             **self._response_log_fields(response),
             **request_context,
@@ -249,7 +252,7 @@ class FlyfusImageGenerateTool(Tool):
 
         uploads: list[tuple[str, bytes | str, str, str]] = []
         try:
-            for index, image in enumerate(getattr(response, "data", []), start=1):
+            for index, image in enumerate(getattr(response, "data", []) or [], start=1):
                 b64_json = getattr(image, "b64_json", None)
                 image_url = getattr(image, "url", None)
                 if b64_json:
@@ -345,7 +348,29 @@ class FlyfusImageGenerateTool(Tool):
         message = str(error).lower()
         return "json_invalid" in message or (
             "invalid json" in message and ("<!doctype html" in message or "expected value" in message)
-        ) or any(marker in message for marker in ("timeout", "connection", "rate limit", "429", "502", "503", "504"))
+        ) or any(
+            marker in message
+            for marker in (
+                "image response did not include data",
+                "upstream request failed",
+                "timeout",
+                "connection",
+                "rate limit",
+                "429",
+                "502",
+                "503",
+                "504",
+            )
+        )
+
+    @staticmethod
+    def _require_image_data(response: object) -> object:
+        if getattr(response, "data", None) is None:
+            error = RuntimeError("Image response did not include data.")
+            error.response = getattr(response, "_response", None)
+            error.request_id = getattr(response, "_request_id", None)
+            raise error
+        return response
 
     @staticmethod
     def _request_fingerprint(
@@ -410,12 +435,38 @@ class FlyfusImageGenerateTool(Tool):
             return {}
         response = getattr(error, "response", None)
         status_code = getattr(error, "status_code", None) or getattr(response, "status_code", None)
-        fields: dict[str, object] = {"exception_type": type(error).__name__}
+        fields: dict[str, object] = {
+            "exception_type": type(error).__name__,
+            "exception_message": str(error)[:2_000],
+        }
         if status_code is not None:
             fields["status_code"] = status_code
         request_id = getattr(error, "request_id", None) or getattr(response, "_request_id", None)
         if request_id:
             fields["upstream_request_id"] = request_id
+        fields.update(FlyfusImageGenerateTool._response_header_log_fields(getattr(response, "headers", None)))
+        return fields
+
+    @staticmethod
+    def _response_header_log_fields(headers: object) -> dict[str, object]:
+        try:
+            normalized_headers = {str(key).lower(): str(value) for key, value in headers.items()}
+        except AttributeError:
+            return {}
+        if not normalized_headers:
+            return {}
+
+        fields: dict[str, object] = {
+            "upstream_response_headers": FlyfusImageGenerateTool._bounded_log_json(
+                {
+                    key: "[REDACTED]" if key in SENSITIVE_RESPONSE_HEADERS else value
+                    for key, value in normalized_headers.items()
+                }
+            )
+        }
+        request_id = normalized_headers.get("x-request-id") or normalized_headers.get("request-id")
+        if request_id:
+            fields["upstream_header_request_id"] = request_id
         return fields
 
     @staticmethod
@@ -464,10 +515,7 @@ class FlyfusImageGenerateTool(Tool):
         status_code = getattr(http_response, "status_code", None)
         if status_code is not None:
             fields["upstream_status_code"] = status_code
-        headers = getattr(http_response, "headers", {}) or {}
-        request_id = headers.get("x-request-id") or headers.get("request-id")
-        if request_id:
-            fields["upstream_header_request_id"] = request_id
+        fields.update(FlyfusImageGenerateTool._response_header_log_fields(getattr(http_response, "headers", None)))
         return fields
 
     @staticmethod

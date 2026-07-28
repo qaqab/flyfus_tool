@@ -184,6 +184,75 @@ def test_image_generation_retries_invalid_json_responses_three_times(monkeypatch
     assert messages[1].message.text == '["https://cdn.example/recovered.png"]'
 
 
+def test_image_request_retries_an_upstream_error_payload_validation_failure(monkeypatch) -> None:
+    calls = 0
+    retries: list[int] = []
+
+    def request() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("input_value={'error': {'message': 'Upstream request failed', 'type': 'upstream_error'}}")
+        return "recovered"
+
+    monkeypatch.setattr("tools.image.flyfus_image_generate.time.sleep", lambda seconds: None)
+
+    response = FlyfusImageGenerateTool._run_image_request_with_retry(
+        request,
+        on_retry=lambda attempt, error: retries.append(attempt),
+    )
+
+    assert response == "recovered"
+    assert calls == 2
+    assert retries == [1]
+
+
+def test_image_request_retries_when_the_response_data_is_missing(monkeypatch) -> None:
+    calls = 0
+    retries: list[int] = []
+
+    def request() -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        data = None if calls == 1 else []
+        return FlyfusImageGenerateTool._require_image_data(SimpleNamespace(data=data))
+
+    monkeypatch.setattr("tools.image.flyfus_image_generate.time.sleep", lambda seconds: None)
+
+    response = FlyfusImageGenerateTool._run_image_request_with_retry(
+        request,
+        on_retry=lambda attempt, error: retries.append(attempt),
+    )
+
+    assert response.data == []
+    assert calls == 2
+    assert retries == [1]
+
+
+def test_image_error_logs_the_upstream_response_header_request_id() -> None:
+    class GatewayTimeout(Exception):
+        def __init__(self) -> None:
+            self.status_code = 524
+            self.response = SimpleNamespace(
+                headers={
+                    "x-request-id": "gateway-request-123",
+                    "server": "edge-gateway",
+                    "set-cookie": "session=secret",
+                }
+            )
+
+    fields = FlyfusImageGenerateTool._error_log_fields(GatewayTimeout())
+
+    assert fields["status_code"] == 524
+    assert fields["exception_message"] == ""
+    assert fields["upstream_header_request_id"] == "gateway-request-123"
+    assert json.loads(fields["upstream_response_headers"]) == {
+        "server": "edge-gateway",
+        "set-cookie": "[REDACTED]",
+        "x-request-id": "gateway-request-123",
+    }
+
+
 def test_image_generation_logs_empty_upstream_responses(monkeypatch) -> None:
     events: list[tuple[str, dict]] = []
 
@@ -226,6 +295,9 @@ def test_image_generation_logs_empty_upstream_responses(monkeypatch) -> None:
     assert response_empty["upstream_response_body_source"] == "sdk_parsed"
     assert response_empty["upstream_status_code"] == 200
     assert response_empty["upstream_header_request_id"] == "upstream-header-request-id"
+    assert json.loads(response_empty["upstream_response_headers"]) == {
+        "x-request-id": "upstream-header-request-id"
+    }
     assert response_empty["request_fingerprint"]
     assert messages[0].message.json_object["urls"] == []
     assert messages[0].message.json_object["error"] == "The image model did not return any images."
