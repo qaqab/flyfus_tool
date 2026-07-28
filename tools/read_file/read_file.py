@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Generator
 from urllib.parse import urlparse
@@ -28,13 +27,25 @@ class ReadFileTool(Tool):
             yield self.create_text_message("[]")
             return
 
-        context = {
-            "version": 1,
-            "type": "flyfus_context",
-            "urls": urls,
-        }
-        encoded_context = json.dumps(context, ensure_ascii=False, separators=(",", ":"))
-        yield self.create_text_message(f"<{self._TAG_NAME}>{encoded_context}</{self._TAG_NAME}>")
+        yield self.create_text_message(self._format_context(urls))
+
+    @classmethod
+    def _format_context(cls, urls: list[str]) -> str:
+        image_count = 0
+        file_count = 0
+        lines: list[str] = []
+
+        for url in urls:
+            # Labels make tool output readable; the model plugin extracts only the URL.
+            if urlparse(url).path.lower().endswith(cls._IMAGE_SUFFIXES):
+                image_count += 1
+                label = f"image{image_count}"
+            else:
+                file_count += 1
+                label = f"file{file_count}"
+            lines.append(f'{label}: "{url}"')
+
+        return f"<{cls._TAG_NAME}>\n{"\n".join(lines)}\n</{cls._TAG_NAME}>"
 
     @classmethod
     def _parse_urls(cls, value: object) -> tuple[list[str], list[str]]:

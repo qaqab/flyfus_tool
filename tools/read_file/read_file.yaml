@@ -6,17 +6,29 @@ identity:
     zh_Hans: 读取文件 URL
 description:
   human:
-    en_US: Convert public URLs into Flyfus context for the next model call.
+    en_US: |-
+      - Formats public image and file URLs as Flyfus context.
+      - Accepts PNG, JPG, JPEG, PDF, MD, XLSX, CSV, TXT, and HTML URLs.
+      - Outputs image URLs as image1, image2, and file URLs as file1, file2.
+      - Example output:
+        <FLYFUS_CONTEXT>
+        image1: "https://example.com/a.jpg"
+        file1: "https://example.com/report.pdf"
+        </FLYFUS_CONTEXT>
     zh_Hans: |-
-      - 需要读取文件的时候使用本工具。
-      - 支持以下格式图片： PNG, JPG, JPEG
-      - 支持以下格式文件： PDF, MD, XLSX, CSV, TXT, HTML
-      - 不支持其他任何格式
+      - 用于将公网图片或文件 URL 整理为 Flyfus 上下文。
+      - 支持图片：PNG、JPG、JPEG；支持文件：PDF、MD、XLSX、CSV、TXT、HTML。
+      - 图片依次输出为 image1、image2；文件依次输出为 file1、file2。
+      - 输出示例：
+        <FLYFUS_CONTEXT>
+        image1: "https://example.com/a.jpg"
+        file1: "https://example.com/report.pdf"
+        </FLYFUS_CONTEXT>
   llm: |-
-    - 需要读取文件的时候使用本工具。
-    - 支持以下格式图片： PNG, JPG, JPEG
-    - 支持以下格式文件： PDF, MD, XLSX, CSV, TXT, HTML
-    - 不支持其他任何格式
+    - 将公网图片或文件 URL 整理为 Flyfus 上下文。
+    - 输入多个 URL 时，使用逗号或换行分隔。
+    - 支持图片：PNG、JPG、JPEG；支持文件：PDF、MD、XLSX、CSV、TXT、HTML。
+    - 输出使用 <FLYFUS_CONTEXT> 标签；图片编号为 image1、image2，文件编号为 file1、file2。
 parameters:
   - name: url_list
     type: string
@@ -26,9 +38,9 @@ parameters:
       en_US: URLs
       zh_Hans: URL 列表
     human_description:
-      en_US: "Public URLs separated by commas or new lines. Supported images: PNG, JPG, JPEG. Supported files: PDF, MD, XLSX, CSV, TXT, HTML."
-      zh_Hans: "用逗号或换行分隔的 URL 列表。支持图片：PNG、JPG、JPEG；支持文件：PDF、MD、XLSX、CSV、TXT、HTML；不支持其他格式。"
-    llm_description: "需要读取文件时使用。传入用逗号或换行分隔的 URL 列表。只支持 PNG、JPG、JPEG、PDF、MD、XLSX、CSV、TXT、HTML；不支持其他格式。"
+      en_US: "Public URLs separated by commas or new lines. The tool formats them as numbered image and file entries."
+      zh_Hans: "用逗号或换行分隔的公网 URL 列表。工具会整理为带 image 或 file 编号的输出。"
+    llm_description: "传入用逗号或换行分隔的公网 URL 列表。支持 PNG、JPG、JPEG、PDF、MD、XLSX、CSV、TXT、HTML。"
 extra:
   python:
     source: tools/read_file/read_file.py
