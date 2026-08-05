@@ -6,4 +6,4 @@ supported_operations:
   - generate
   - edit
 supports_reference_images: true
-supports_mask: true
+supports_mask: false

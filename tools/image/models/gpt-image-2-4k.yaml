@@ -4,5 +4,6 @@ label:
   zh_Hans: GPT Image 2 4K
 supported_operations:
   - generate
-supports_reference_images: false
+  - edit
+supports_reference_images: true
 supports_mask: false

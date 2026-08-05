@@ -1,21 +1,45 @@
 description:
   human:
-    en_US: Generate or edit images with Flyfus GPT image models.
-    zh_Hans: 使用 Flyfus GPT 图像模型生成或编辑图片。
-  llm: Generate images from text, or edit/reference one or more image URLs, using Flyfus GPT image models.
+    en_US: Generate or edit images with Flyfus image models.
+    zh_Hans: 使用 Flyfus 图像模型生成或编辑图片。
+  llm: Generate images from text, or edit images from one or more reference image URLs.
 extra:
   python:
     source: tools/image/flyfus_image_generate.py
 identity:
   author: qaqab
   description:
-    en_US: Generate images from prompts and optional reference image URLs through a Flyfus OpenAI-compatible endpoint.
-    zh_Hans: 通过 Flyfus OpenAI 兼容接口，根据提示词和可选参考图 URL 生成图片。
+    en_US: Generate or edit images through the model's verified OpenAI-compatible or Gemini-native API.
+    zh_Hans: 通过模型已验证的 OpenAI 兼容接口或 Gemini 原生接口生成、编辑图片。
   label:
     en_US: Flyfus Image Generate
     zh_Hans: Flyfus 图像生成
   name: flyfus_image_generate
 parameters:
+- default: gpt-image-2
+  form: form
+  human_description:
+    en_US: Select the image model. Parameters marked for another model are ignored.
+    zh_Hans: 选择图片模型；标注为其他模型专用的参数会被忽略。
+  label:
+    en_US: Model
+    zh_Hans: 模型
+  name: model
+  options:
+  - label:
+      en_US: GPT Image 2
+      zh_Hans: GPT Image 2
+    value: gpt-image-2
+  - label:
+      en_US: GPT Image 2 4K
+      zh_Hans: GPT Image 2 4K
+    value: gpt-image-2-4k
+  - label:
+      en_US: Gemini 3.1 Flash Image Preview
+      zh_Hans: Gemini 3.1 Flash Image Preview
+    value: gemini-3.1-flash-image-preview
+  required: true
+  type: select
 - form: llm
   human_description:
     en_US: Required image-generation or image-editing prompt.
@@ -27,220 +51,116 @@ parameters:
   name: prompt
   required: true
   type: string
-- default: gpt-image-2
-  form: form
-  human_description:
-    en_US: Select the image model used by this tool.
-    zh_Hans: 选择本工具使用的图片模型。
-  label:
-    en_US: Model
-    zh_Hans: 模型
-  name: model
-  options:
-  - label:
-      en_US: Gemini 3.1 Flash Image Preview
-      zh_Hans: Gemini 3.1 Flash Image Preview
-    value: gemini-3.1-flash-image-preview
-  - label:
-      en_US: Gemini 3 Pro Image Preview
-      zh_Hans: Gemini 3 Pro Image Preview
-    value: gemini-3-pro-image-preview
-  - label:
-      en_US: GPT Image 2
-      zh_Hans: GPT Image 2
-    value: gpt-image-2
-  - label:
-      en_US: GPT Image 2 4K
-      zh_Hans: GPT Image 2 4K
-    value: gpt-image-2-4k
-  - label:
-      en_US: GPT Image 1.5
-      zh_Hans: GPT Image 1.5
-    value: gpt-image-1.5
-  - label:
-      en_US: GPT Image 1
-      zh_Hans: GPT Image 1
-    value: gpt-image-1
-  required: true
-  type: select
 - form: llm
   human_description:
-    en_US: Optional reference image URLs for image editing. Separate multiple URLs with new lines, commas, or a JSON array.
-    zh_Hans: 可选。用于图片编辑的参考图 URL；多个 URL 可用换行、逗号或 JSON 数组分隔。
+    en_US: Optional for all models. Add reference image URLs to edit images; separate multiple URLs with new lines, commas, or a JSON array. Gemini supports at most two.
+    zh_Hans: 所有模型均可选。传入参考图片 URL 时执行图片编辑；多个 URL 可用换行、逗号或 JSON 数组分隔。Gemini 最多支持两张。
   label:
     en_US: Reference Image URLs
-    zh_Hans: 参考图 URL
-  llm_description: 可选。编辑图片时传入参考图 URL；多个 URL 可用换行、逗号或 JSON 数组分隔。
+    zh_Hans: 参考图片 URL
+  llm_description: 可选，所有模型可用。传入参考图片 URL 时执行编辑；多个 URL 可用换行、逗号或 JSON 数组分隔，Gemini 最多两张。
   name: reference_image_urls
   required: false
   type: string
-- form: llm
-  human_description:
-    en_US: Optional mask image URL for inpainting. Requires at least one reference image URL.
-    zh_Hans: 可选。局部编辑使用的蒙版图 URL；必须同时提供至少一个参考图 URL。
-  label:
-    en_US: Mask URL
-    zh_Hans: 蒙版 URL
-  llm_description: 可选。局部编辑使用的蒙版图 URL；必须同时提供至少一个参考图 URL。
-  name: mask_url
-  required: false
-  type: string
-- default: auto
+- default: "3840x2160"
   form: form
   human_description:
-    en_US: Select the image size.
-    zh_Hans: 选择图像大小。
+    en_US: Only used by gpt-image-2-4k. Other models ignore this parameter.
+    zh_Hans: 仅 gpt-image-2-4k 使用，其他模型忽略此参数。
   label:
-    en_US: Image Size
-    zh_Hans: 图像大小
-  name: size
+    en_US: Output Size (GPT Image 2 4K only)
+    zh_Hans: 输出尺寸（仅 GPT Image 2 4K）
+  name: openai_4k_size
   options:
   - label:
-      en_US: Auto
-      zh_Hans: 自动
-    value: auto
-  - label:
       en_US: Square (1024x1024)
-      zh_Hans: 方形 (1024x1024)
+      zh_Hans: 正方形 (1024x1024)
     value: "1024x1024"
   - label:
       en_US: Landscape (1536x1024)
-      zh_Hans: 横屏/风景 (1536x1024)
+      zh_Hans: 横向 (1536x1024)
     value: "1536x1024"
   - label:
       en_US: Portrait (1024x1536)
-      zh_Hans: 竖屏/肖像 (1024x1536)
+      zh_Hans: 纵向 (1024x1536)
     value: "1024x1536"
   - label:
+      en_US: 2K Square (2048x2048)
+      zh_Hans: 2K 正方形 (2048x2048)
+    value: "2048x2048"
+  - label:
+      en_US: 2K Landscape (2048x1152)
+      zh_Hans: 2K 横向 (2048x1152)
+    value: "2048x1152"
+  - label:
       en_US: 4K Landscape (3840x2160)
-      zh_Hans: 4K 横屏 (3840x2160)
+      zh_Hans: 4K 横向 (3840x2160)
     value: "3840x2160"
+  - label:
+      en_US: 4K Portrait (2160x3840)
+      zh_Hans: 4K 纵向 (2160x3840)
+    value: "2160x3840"
   required: false
   type: select
-# The current image endpoint only honors size, output_format, and moderation.
-# - default: 1
-#   form: form
-#   human_description:
-#     en_US: Number of images to generate, between 1 and 10.
-#     zh_Hans: 要生成的图片数量，1 到 10。
-#   label:
-#     en_US: Number of Images
-#     zh_Hans: 图片数量
-#   max: 10
-#   min: 1
-#   name: n
-#   required: false
-#   type: number
-# - default: auto
-#   form: form
-#   human_description:
-#     en_US: Image quality.
-#     zh_Hans: 图像质量。
-#   label:
-#     en_US: Image Quality
-#     zh_Hans: 图像质量
-#   name: quality
-#   options:
-#   - label:
-#       en_US: Auto
-#       zh_Hans: 自动
-#     value: auto
-#   - label:
-#       en_US: Low
-#       zh_Hans: 低
-#     value: low
-#   - label:
-#       en_US: Medium
-#       zh_Hans: 中
-#     value: medium
-#   - label:
-#       en_US: High
-#       zh_Hans: 高
-#     value: high
-#   required: false
-#   type: select
-- default: auto
+- default: 1K
   form: form
   human_description:
-    en_US: Output image format.
-    zh_Hans: 输出图片格式。
+    en_US: Only used by gemini-3.1-flash-image-preview. Other models ignore this parameter.
+    zh_Hans: 仅 gemini-3.1-flash-image-preview 使用，其他模型忽略此参数。
   label:
-    en_US: Output Format
-    zh_Hans: 输出格式
-  name: output_format
+    en_US: Image Size (Gemini only)
+    zh_Hans: 图像大小（仅 Gemini）
+  name: gemini_image_size
   options:
   - label:
-      en_US: Auto
-      zh_Hans: 自动
-    value: auto
+      en_US: "512"
+      zh_Hans: "512"
+    value: "512"
   - label:
-      en_US: PNG
-      zh_Hans: PNG
-    value: png
+      en_US: 1K
+      zh_Hans: 1K
+    value: 1K
   - label:
-      en_US: JPEG
-      zh_Hans: JPEG
-    value: jpeg
-  - label:
-      en_US: WebP
-      zh_Hans: WebP
-    value: webp
+      en_US: 2K
+      zh_Hans: 2K
+    value: 2K
   required: false
   type: select
-# - default: 100
-#   form: form
-#   human_description:
-#     en_US: Compression level for JPEG or WebP output, between 0 and 100.
-#     zh_Hans: JPEG 或 WebP 输出压缩级别，0 到 100。
-#   label:
-#     en_US: Output Compression
-#     zh_Hans: 输出压缩
-#   max: 100
-#   min: 0
-#   name: output_compression
-#   required: false
-#   type: number
-# - default: auto
-#   form: form
-#   human_description:
-#     en_US: Background mode. Transparent is not supported by GPT Image 2.
-#     zh_Hans: 背景模式。GPT Image 2 不支持透明背景。
-#   label:
-#     en_US: Background
-#     zh_Hans: 背景
-#   name: background
-#   options:
-#   - label:
-#       en_US: Auto
-#       zh_Hans: 自动
-#     value: auto
-#   - label:
-#       en_US: Opaque
-#       zh_Hans: 不透明
-#     value: opaque
-#   - label:
-#       en_US: Transparent
-#       zh_Hans: 透明
-#     value: transparent
-#   required: false
-#   type: select
-- default: auto
+- default: "1:1"
   form: form
   human_description:
-    en_US: Moderation level.
-    zh_Hans: 内容审核级别。
+    en_US: Only used by gemini-3.1-flash-image-preview. Other models ignore this parameter.
+    zh_Hans: 仅 gemini-3.1-flash-image-preview 使用，其他模型忽略此参数。
   label:
-    en_US: Moderation
-    zh_Hans: 内容审核
-  name: moderation
+    en_US: Aspect Ratio (Gemini only)
+    zh_Hans: 宽高比（仅 Gemini）
+  name: gemini_aspect_ratio
   options:
-  - label:
-      en_US: Auto
-      zh_Hans: 自动
-    value: auto
-  - label:
-      en_US: Low
-      zh_Hans: 低
-    value: low
+  - label: {en_US: "1:1", zh_Hans: "1:1"}
+    value: "1:1"
+  - label: {en_US: "1:4", zh_Hans: "1:4"}
+    value: "1:4"
+  - label: {en_US: "1:8", zh_Hans: "1:8"}
+    value: "1:8"
+  - label: {en_US: "3:2", zh_Hans: "3:2"}
+    value: "3:2"
+  - label: {en_US: "2:3", zh_Hans: "2:3"}
+    value: "2:3"
+  - label: {en_US: "3:4", zh_Hans: "3:4"}
+    value: "3:4"
+  - label: {en_US: "4:1", zh_Hans: "4:1"}
+    value: "4:1"
+  - label: {en_US: "4:3", zh_Hans: "4:3"}
+    value: "4:3"
+  - label: {en_US: "4:5", zh_Hans: "4:5"}
+    value: "4:5"
+  - label: {en_US: "5:4", zh_Hans: "5:4"}
+    value: "5:4"
+  - label: {en_US: "8:1", zh_Hans: "8:1"}
+    value: "8:1"
+  - label: {en_US: "16:9", zh_Hans: "16:9"}
+    value: "16:9"
+  - label: {en_US: "21:9", zh_Hans: "21:9"}
+    value: "21:9"
   required: false
   type: select

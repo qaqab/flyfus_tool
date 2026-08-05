@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 import requests
+import yaml
 
 from tools.image._image_utils import (
     ModelListRequestError,
     fetch_openai_model_ids,
+    image_model_ids,
     normalize_openai_base_url,
 )
 
@@ -21,7 +24,34 @@ class FakeResponse:
         return self.payload
 
 
-def test_fetch_openai_model_ids_uses_the_openai_models_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_image_tool_exposes_only_the_final_model_parameters() -> None:
+    tool_yaml = Path(__file__).resolve().parents[1] / "flyfus_image_generate.yaml"
+    configuration = yaml.safe_load(tool_yaml.read_text(encoding="utf-8"))
+    parameters = {
+        parameter["name"]: parameter for parameter in configuration["parameters"]
+    }
+
+    assert list(parameters) == [
+        "model",
+        "prompt",
+        "reference_image_urls",
+        "openai_4k_size",
+        "gemini_image_size",
+        "gemini_aspect_ratio",
+    ]
+    assert [option["value"] for option in parameters["model"]["options"]] == [
+        "gpt-image-2",
+        "gpt-image-2-4k",
+        "gemini-3.1-flash-image-preview",
+    ]
+    assert image_model_ids() == frozenset(
+        {"gpt-image-2", "gpt-image-2-4k", "gemini-3.1-flash-image-preview"}
+    )
+
+
+def test_fetch_openai_model_ids_uses_the_openai_models_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     observed: dict[str, str | bool | tuple[float, float]] = {}
 
     def fake_get(
@@ -85,7 +115,9 @@ def test_normalize_openai_base_url_rejects_unsafe_endpoint_forms(raw_url: str) -
         normalize_openai_base_url(raw_url)
 
 
-def test_fetch_openai_model_ids_redacts_api_key_from_http_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_openai_model_ids_redacts_api_key_from_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_get(
         url: str,
         *,
@@ -104,7 +136,9 @@ def test_fetch_openai_model_ids_redacts_api_key_from_http_errors(monkeypatch: py
     assert "test-api-key" not in str(raised.value)
 
 
-def test_fetch_openai_model_ids_drops_the_original_header_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_openai_model_ids_drops_the_original_header_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_get(
         url: str,
         *,
@@ -112,7 +146,9 @@ def test_fetch_openai_model_ids_drops_the_original_header_error(monkeypatch: pyt
         timeout: tuple[float, float],
         allow_redirects: bool,
     ) -> FakeResponse:
-        raise requests.exceptions.InvalidHeader("Invalid header value Bearer test-api-key")
+        raise requests.exceptions.InvalidHeader(
+            "Invalid header value Bearer test-api-key"
+        )
 
     monkeypatch.setattr("tools.image._image_utils.requests.get", fake_get)
 
