@@ -47,6 +47,18 @@ credentials_for_provider:
       zh_Hans: 输入 OSS API Token
     required: true
     type: secret-input
+  reveal_layer_api_key:
+    help:
+      en_US: Required by the Flyfus RevealLayer tool.
+      zh_Hans: Flyfus 图层拆解工具必填。
+    label:
+      en_US: RevealLayer API Key
+      zh_Hans: RevealLayer API Key
+    placeholder:
+      en_US: Enter RevealLayer API Key
+      zh_Hans: 输入 RevealLayer API Key
+    required: true
+    type: secret-input
   sls_endpoint:
     help:
       en_US: Required Alibaba Cloud SLS endpoint for tool invocation logs.
@@ -70,6 +82,18 @@ credentials_for_provider:
       en_US: Enter SLS project name
       zh_Hans: 输入 SLS 项目名称
     required: true
+    type: text-input
+  sls_logstore:
+    help:
+      en_US: Optional Alibaba Cloud SLS Logstore for tool invocation logs.
+      zh_Hans: 可选。工具调用日志使用的阿里云 SLS Logstore。
+    label:
+      en_US: SLS Logstore
+      zh_Hans: SLS Logstore
+    placeholder:
+      en_US: "Default: flyfus-dify-llm-log"
+      zh_Hans: 默认：flyfus-dify-llm-log
+    required: false
     type: text-input
   sls_access_key_id:
     help:
@@ -138,6 +162,7 @@ identity:
     - utilities
 tools:
   - tools/image/flyfus_image_generate.yaml
+  - tools/reveal_layer/flyfus_reveal_layer.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
   - tools/skills/flyfus_skills.yaml

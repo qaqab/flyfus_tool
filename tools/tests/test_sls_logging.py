@@ -5,6 +5,7 @@ from tools._sls_logging import SLS_LOG_TIMEOUT_SECONDS, write_tool_log
 
 def test_write_tool_log_uses_a_bounded_timeout(monkeypatch) -> None:
     clients = []
+    requests = []
 
     class FakeLogItem:
         def set_time(self, value) -> None:
@@ -21,13 +22,19 @@ def test_write_tool_log_uses_a_bounded_timeout(monkeypatch) -> None:
         def put_logs(self, request) -> None:
             assert self.timeout == SLS_LOG_TIMEOUT_SECONDS
 
+    class FakePutLogsRequest:
+        def __init__(self, project, logstore, topic, source, logitems) -> None:
+            requests.append({"project": project, "logstore": logstore})
+
     monkeypatch.setattr("tools._sls_logging.LogItem", FakeLogItem)
     monkeypatch.setattr("tools._sls_logging.LogClient", FakeClient)
+    monkeypatch.setattr("tools._sls_logging.PutLogsRequest", FakePutLogsRequest)
 
     uploaded = write_tool_log(
         {
             "sls_endpoint": "https://example.log.aliyuncs.com",
             "sls_project": "test-project",
+            "sls_logstore": "custom-logstore",
             "sls_access_key_id": "test-key-id",
             "sls_access_key_secret": "test-key-secret",
         },
@@ -37,7 +44,49 @@ def test_write_tool_log_uses_a_bounded_timeout(monkeypatch) -> None:
 
     assert uploaded is True
     assert len(clients) == 1
+    assert requests == [{"project": "test-project", "logstore": "custom-logstore"}]
 
 
 def test_write_tool_log_reports_missing_credentials() -> None:
     assert write_tool_log({}, "test-log-id", "image_started") is False
+
+
+def test_write_tool_log_defaults_logstore_for_existing_credentials(monkeypatch) -> None:
+    captured = {}
+
+    class FakeLogItem:
+        def set_time(self, value) -> None:
+            pass
+
+        def set_contents(self, value) -> None:
+            pass
+
+    class FakeClient:
+        def __init__(self, *args) -> None:
+            self.timeout = None
+
+        def put_logs(self, request) -> None:
+            pass
+
+    def fake_request(project, logstore, topic, source, logitems):
+        captured["logstore"] = logstore
+        return object()
+
+    monkeypatch.setattr("tools._sls_logging.LogItem", FakeLogItem)
+    monkeypatch.setattr("tools._sls_logging.LogClient", FakeClient)
+    monkeypatch.setattr("tools._sls_logging.PutLogsRequest", fake_request)
+
+    uploaded = write_tool_log(
+        {
+            "sls_endpoint": "https://example.log.aliyuncs.com",
+            "sls_project": "test-project",
+            "sls_logstore": "   ",
+            "sls_access_key_id": "test-key-id",
+            "sls_access_key_secret": "test-key-secret",
+        },
+        "test-log-id",
+        "image_started",
+    )
+
+    assert uploaded is True
+    assert captured["logstore"] == "flyfus-dify-llm-log"

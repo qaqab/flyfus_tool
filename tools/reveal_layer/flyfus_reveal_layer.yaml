@@ -1,0 +1,101 @@
+identity:
+  author: qaqab
+  name: flyfus_reveal_layer
+  label:
+    en_US: Flyfus RevealLayer
+    zh_Hans: Flyfus 图层拆解
+description:
+  human:
+    en_US: Split one image with RevealLayer and upload each full-size PNG layer to Flyfus OSS.
+    zh_Hans: 使用 RevealLayer 拆分图片，恢复原图 RGB 后将每张原尺寸 PNG 图层上传到 Flyfus OSS。
+  llm: 接收单张公网图片 URL 和带名称的像素坐标 JSON，同步返回背景及前景图层 URL 列表。
+extra:
+  python:
+    source: tools/reveal_layer/flyfus_reveal_layer.py
+parameters:
+  - name: image_url
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: Image URL
+      zh_Hans: 图片 URL
+    human_description:
+      en_US: One public HTTP or HTTPS PNG, JPEG, or WebP URL.
+      zh_Hans: 必填。单张公网 HTTP 或 HTTPS PNG、JPEG、WebP 图片 URL。
+    llm_description: 必填。传入一张公网图片 URL，不支持 base64 或多张图片。
+  - name: layers_json
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: Layers JSON
+      zh_Hans: 图层坐标 JSON
+    human_description:
+      en_US: Required for crop mode. JSON array of objects with name and bbox [x1,y1,x2,y2].
+      zh_Hans: crop 模式必填。对象数组，每项包含 name 和原图像素坐标 bbox [x1,y1,x2,y2]。
+    llm_description: 'crop 模式必填。格式：[{"name":"主产品","bbox":[10,20,800,900]}]，最多 6 项。不要单独框细碎小对象，应并入相邻主体或面板。'
+  - name: version
+    type: string
+    required: true
+    default: v2.3
+    form: form
+    label:
+      en_US: Version
+      zh_Hans: RevealLayer 版本
+    human_description:
+      en_US: RevealLayer API version.
+      zh_Hans: RevealLayer API 版本，默认 v2.3。
+  - name: pipeline_type
+    type: select
+    required: true
+    default: crop
+    form: form
+    label:
+      en_US: Pipeline Type
+      zh_Hans: 分层模式
+    human_description:
+      en_US: crop uses layers_json boxes; all ignores layers_json and detects all layers.
+      zh_Hans: crop 使用 layers_json 坐标；all 忽略 layers_json，由 RevealLayer 自动分层。
+    options:
+      - label: {en_US: Crop by boxes, zh_Hans: 按坐标框分层}
+        value: crop
+      - label: {en_US: All layers, zh_Hans: 自动全部分层}
+        value: all
+  - name: steps
+    type: number
+    required: true
+    default: 10
+    form: form
+    min: 10
+    max: 30
+    label:
+      en_US: Steps
+      zh_Hans: 生成步数
+    human_description:
+      en_US: RevealLayer generation steps, 10 to 30. The tested default is 10.
+      zh_Hans: RevealLayer 生成步数，可设置 10-30，已实测默认为 10。
+  - name: seed
+    type: number
+    required: true
+    default: 42
+    form: form
+    min: 0
+    max: 4294967295
+    label:
+      en_US: Seed
+      zh_Hans: 随机种子
+    human_description:
+      en_US: Integer random seed from 0 to 4294967295.
+      zh_Hans: 0 到 4294967295 的整数随机种子，默认 42。
+  - name: debug
+    type: boolean
+    required: true
+    default: false
+    form: form
+    label:
+      en_US: Debug Preview
+      zh_Hans: 调试框预览
+    human_description:
+      en_US: Upload an additional source preview with numbered boxes and coordinates.
+      zh_Hans: 开启后额外上传一张标有编号、坐标和框的原图预览。

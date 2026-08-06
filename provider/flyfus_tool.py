@@ -24,6 +24,9 @@ class FlyfusToolProvider(ToolProvider):
             raise ToolProviderCredentialValidationError("请填写有效的 HTTPS OSS API 基础地址")
         if not oss_api_token:
             raise ToolProviderCredentialValidationError("请填写 OSS API Token")
+        reveal_layer_api_key = str(credentials.get("reveal_layer_api_key") or "").strip()
+        if not reveal_layer_api_key:
+            raise ToolProviderCredentialValidationError("请填写 RevealLayer API Key")
         sls_endpoint = str(credentials.get("sls_endpoint") or "").strip()
         sls_project = str(credentials.get("sls_project") or "").strip()
         sls_access_key_id = str(credentials.get("sls_access_key_id") or "").strip()

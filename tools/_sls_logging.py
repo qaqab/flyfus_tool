@@ -7,7 +7,7 @@ from typing import Any
 from aliyun.log import LogClient, LogItem, PutLogsRequest
 
 
-SLS_LOGSTORE = "flyfus-dify-llm-log"
+DEFAULT_SLS_LOGSTORE = "flyfus-dify-llm-log"
 SLS_LOG_TIMEOUT_SECONDS = 10
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 def write_tool_log(credentials: dict[str, Any], log_id: str, event: str, **fields: object) -> bool:
     endpoint = str(credentials.get("sls_endpoint") or "").strip()
     project = str(credentials.get("sls_project") or "").strip()
+    logstore = str(credentials.get("sls_logstore") or "").strip() or DEFAULT_SLS_LOGSTORE
     access_key_id = str(credentials.get("sls_access_key_id") or "").strip()
     access_key_secret = str(credentials.get("sls_access_key_secret") or "").strip()
     if not endpoint or not project or not access_key_id or not access_key_secret:
@@ -30,7 +31,7 @@ def write_tool_log(credentials: dict[str, Any], log_id: str, event: str, **field
         client = LogClient(endpoint, access_key_id, access_key_secret)
         client.timeout = SLS_LOG_TIMEOUT_SECONDS
         client.put_logs(
-            PutLogsRequest(project, SLS_LOGSTORE, "flyfus-tool", "", [log_item])
+            PutLogsRequest(project, logstore, "flyfus-tool", "", [log_item])
         )
         return True
     except Exception as error:
