@@ -997,10 +997,12 @@ class FlyfusImageGenerateTool(Tool):
 
         urls: list[str] = []
         for item in raw_items:
-            url = str(item).strip()
-            if url:
-                FlyfusImageGenerateTool._validate_http_url(url)
-                urls.append(url)
+            item_text = str(item).replace("\r\n", "\n").replace("\r", "\n")
+            for candidate in item_text.split("\n"):
+                url = candidate.strip()
+                if url:
+                    FlyfusImageGenerateTool._validate_http_url(url)
+                    urls.append(url)
         return urls
 
     @staticmethod

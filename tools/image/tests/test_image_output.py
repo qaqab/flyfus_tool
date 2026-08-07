@@ -10,6 +10,26 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 from tools.image.flyfus_image_generate import FlyfusImageGenerateTool
 
 
+def test_parse_urls_splits_multiline_items_inside_json_array() -> None:
+    value = json.dumps(
+        [
+            "https://o1.flyfus.com/I/dz4pVY.png",
+            (
+                "https://o1.flyfus.com/F/wCS6Xn.jpg\n"
+                "https://o1.flyfus.com/F/wm41xH.jpg\r\n"
+                "https://o1.flyfus.com/F/0Fi3Rb.jpg"
+            ),
+        ]
+    )
+
+    assert FlyfusImageGenerateTool._parse_urls(value) == [
+        "https://o1.flyfus.com/I/dz4pVY.png",
+        "https://o1.flyfus.com/F/wCS6Xn.jpg",
+        "https://o1.flyfus.com/F/wm41xH.jpg",
+        "https://o1.flyfus.com/F/0Fi3Rb.jpg",
+    ]
+
+
 def test_image_generation_returns_urls_as_a_json_array(monkeypatch) -> None:
     received_args: dict = {}
 
