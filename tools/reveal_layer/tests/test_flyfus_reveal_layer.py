@@ -12,6 +12,7 @@ from tools.reveal_layer.flyfus_reveal_layer import (
     FlyfusRevealLayerTool,
     build_submit_payload,
     _log_json,
+    normalized_layers_to_pixels,
     parse_layers_json,
 )
 
@@ -28,9 +29,10 @@ def test_module_loads_without_sys_modules_registration() -> None:
 
 
 def test_parse_layers_json_and_build_crop_payload() -> None:
-    layers = parse_layers_json(
+    normalized_layers = parse_layers_json(
         json.dumps([{"name": "主产品", "bbox": [10, 20, 300, 400]}], ensure_ascii=False)
     )
+    layers = normalized_layers_to_pixels(normalized_layers, (2000, 1000))
 
     payload = build_submit_payload(
         "data:image/png;base64,abc",
@@ -41,8 +43,8 @@ def test_parse_layers_json_and_build_crop_payload() -> None:
         seed=42,
     )
 
-    assert layers[0].name == "主产品"
-    assert payload["image_boxes"] == [[10, 20, 300, 400]]
+    assert normalized_layers[0].name == "主产品"
+    assert payload["image_boxes"] == [[20, 20, 600, 400]]
     assert payload["steps"] == 10
     assert payload["seed"] == 42
 
@@ -62,8 +64,23 @@ def test_all_payload_omits_image_boxes() -> None:
     assert "image_boxes" not in payload
 
 
+def test_normalized_boxes_are_scaled_to_source_pixels() -> None:
+    layers = parse_layers_json(
+        '[{"name":"展开状态露营车","bbox":[104,94,435,458]},'
+        '{"name":"折叠状态露营车","bbox":[639,127,800,410]}]'
+    )
+
+    converted = normalized_layers_to_pixels(layers, (1254, 1254))
+
+    assert [list(layer.bbox) for layer in converted] == [
+        [130, 118, 545, 574],
+        [801, 159, 1003, 514],
+    ]
+
+
 def test_tiny_box_is_rejected_before_reveal_request() -> None:
-    layers = parse_layers_json('[{"name":"小图标","bbox":[0,0,20,20]}]')
+    normalized_layers = parse_layers_json('[{"name":"小图标","bbox":[0,0,4,4]}]')
+    layers = normalized_layers_to_pixels(normalized_layers, (5000, 3500))
 
     with pytest.raises(ValueError, match="bbox 太小"):
         FlyfusRevealLayerTool._validate_layers(layers, (5000, 3500))
@@ -202,10 +219,12 @@ def test_sync_tool_returns_uploaded_image_urls(monkeypatch) -> None:
         "https://cdn.example/layer_01.png",
     ]
     assert result["source_size"] == [128, 128]
+    assert result["normalized_boxes"] == [[0, 0, 100, 100]]
+    assert result["pixel_boxes"] == [[0, 0, 13, 13]]
     text_result = json.loads(messages[1].message.text)
     assert text_result["log_id"] == result["log_id"]
     assert text_result["image_urls"] == result["image_urls"]
-    assert captured["payload"]["image_boxes"] == [[0, 0, 100, 100]]
+    assert captured["payload"]["image_boxes"] == [[0, 0, 13, 13]]
     assert [event for event, _ in logs] == [
         "input_checked",
         "submit_request",
@@ -215,6 +234,46 @@ def test_sync_tool_returns_uploaded_image_urls(monkeypatch) -> None:
     assert logs[0][1]["image_name"] == "source.png"
     assert "image_base64" not in logs[1][1]["request_json"]
     assert "background.png" in logs[2][1]["files_json"]
+
+
+def test_debug_image_url_is_returned_when_reveal_request_fails(monkeypatch) -> None:
+    source = Image.new("RGB", (128, 128), "white")
+    monkeypatch.setattr(
+        FlyfusRevealLayerTool,
+        "_download_source",
+        staticmethod(lambda url: (b"image", "image/png", source)),
+    )
+    monkeypatch.setattr(
+        FlyfusRevealLayerTool,
+        "_upload_images",
+        lambda self, images, log_id: ["https://cdn.example/debug_boxes.png"],
+    )
+    monkeypatch.setattr(
+        FlyfusRevealLayerTool,
+        "_submit_and_wait",
+        lambda self, payload, version, log_id: (_ for _ in ()).throw(
+            TimeoutError("timed out")
+        ),
+    )
+    monkeypatch.setattr(FlyfusRevealLayerTool, "_write_log", lambda *args, **kwargs: None)
+    tool = FlyfusRevealLayerTool.from_credentials({"reveal_layer_api_key": "test"})
+
+    messages = list(
+        tool.invoke(
+            {
+                "image_url": "https://images.example/source.png",
+                "layers_json": '[{"name":"main","bbox":[0,0,500,500]}]',
+                "debug": True,
+            }
+        )
+    )
+
+    json_result = messages[0].message.json_object
+    text_result = json.loads(messages[1].message.text)
+    assert json_result["boxed_image_url"] == "https://cdn.example/debug_boxes.png"
+    assert text_result["boxed_image_url"] == "https://cdn.example/debug_boxes.png"
+    assert json_result["image_urls"] == []
+    assert "timed out" in json_result["error"]
 
 
 def test_images_upload_concurrently_to_general_file_endpoint(monkeypatch) -> None:
@@ -272,7 +331,8 @@ def test_images_upload_concurrently_to_general_file_endpoint(monkeypatch) -> Non
 
 def test_debug_preview_draws_numbered_box() -> None:
     source = Image.new("RGB", (200, 200), "white")
-    layers = parse_layers_json('[{"name":"产品","bbox":[20,30,120,150]}]')
+    normalized_layers = parse_layers_json('[{"name":"产品","bbox":[100,150,600,750]}]')
+    layers = normalized_layers_to_pixels(normalized_layers, source.size)
 
     preview = FlyfusRevealLayerTool._build_boxed_preview(source, layers)
 

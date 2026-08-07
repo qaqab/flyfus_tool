@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.39
+
+- Uploaded the debug bounding-box preview before calling RevealLayer.
+- Returned the uploaded boxed image URL even when RevealLayer later fails or times out.
+
+## 0.0.37
+
+- Standardized Gemini layer boxes to 0-1000 coordinates and converted them to source pixels inside the tool.
+- Returned both normalized_boxes and pixel_boxes for debugging.
+
 ## 0.0.34
 
 - Returned log_id on success and added per-stage timing fields.

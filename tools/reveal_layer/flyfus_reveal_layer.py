@@ -25,6 +25,7 @@ DOWNLOAD_TIMEOUT = (10, 120)
 API_TIMEOUT = (10, 60)
 MAX_WAIT_SECONDS = 180
 POLL_INTERVAL_SECONDS = 3
+NORMALIZED_COORDINATE_MAX = 1000
 
 
 @dataclass(frozen=True)
@@ -61,10 +62,39 @@ def parse_layers_json(value: object) -> list[LayerSpec]:
         except ValueError as error:
             raise ValueError(f"第 {index} 个图层 {error}") from error
         x1, y1, x2, y2 = coordinates
-        if x1 < 0 or y1 < 0 or x2 <= x1 or y2 <= y1:
+        if (
+            x1 < 0
+            or y1 < 0
+            or x2 <= x1
+            or y2 <= y1
+            or x2 > NORMALIZED_COORDINATE_MAX
+            or y2 > NORMALIZED_COORDINATE_MAX
+        ):
             raise ValueError(f"第 {index} 个图层 bbox 无效")
         layers.append(LayerSpec(name=name, bbox=coordinates))
     return layers
+
+
+def normalized_layers_to_pixels(
+    layers: list[LayerSpec],
+    size: tuple[int, int],
+) -> list[LayerSpec]:
+    width, height = size
+    converted = []
+    for layer in layers:
+        x1, y1, x2, y2 = layer.bbox
+        converted.append(
+            LayerSpec(
+                name=layer.name,
+                bbox=(
+                    round(x1 * width / NORMALIZED_COORDINATE_MAX),
+                    round(y1 * height / NORMALIZED_COORDINATE_MAX),
+                    round(x2 * width / NORMALIZED_COORDINATE_MAX),
+                    round(y2 * height / NORMALIZED_COORDINATE_MAX),
+                ),
+            )
+        )
+    return converted
 
 
 def build_submit_payload(
@@ -103,6 +133,8 @@ class FlyfusRevealLayerTool(Tool):
         log_id = str(uuid.uuid4())
         started_at = time.monotonic()
         stage = "validate_input"
+        boxed_image_url = ""
+        debug_image_time = 0.0
         try:
             image_url = self._validate_image_url(tool_parameters.get("image_url"))
             version = str(tool_parameters.get("version") or "v2.3").strip()
@@ -111,16 +143,22 @@ class FlyfusRevealLayerTool(Tool):
             seed = _integer(tool_parameters.get("seed", 42), "seed")
             debug = _boolean(tool_parameters.get("debug", False), "debug")
             self._validate_options(version, pipeline_type, steps, seed)
-            layers = (
+            normalized_layers = (
                 parse_layers_json(tool_parameters.get("layers_json"))
                 if pipeline_type == "crop"
                 else []
             )
             stage = "download_source"
             source_bytes, mime_type, source_rgb = self._download_source(image_url)
+            layers = normalized_layers_to_pixels(normalized_layers, source_rgb.size)
             stage = "validate_layers"
             self._validate_layers(layers, source_rgb.size)
-            layer_plan = [{"name": layer.name, "bbox": list(layer.bbox)} for layer in layers]
+            normalized_layer_plan = [
+                {"name": layer.name, "bbox": list(layer.bbox)} for layer in normalized_layers
+            ]
+            pixel_layer_plan = [
+                {"name": layer.name, "bbox": list(layer.bbox)} for layer in layers
+            ]
             self._write_log(
                 log_id,
                 "input_checked",
@@ -135,7 +173,8 @@ class FlyfusRevealLayerTool(Tool):
                 seed=seed,
                 debug=debug,
                 requested_layers=len(layers),
-                layers_json=_log_json(layer_plan),
+                normalized_layers_json=_log_json(normalized_layer_plan),
+                pixel_layers_json=_log_json(pixel_layer_plan),
                 checks_json=_log_json(
                     {
                         "source_image_valid": True,
@@ -144,6 +183,15 @@ class FlyfusRevealLayerTool(Tool):
                     }
                 ),
             )
+            if debug:
+                stage = "upload_debug_image"
+                debug_started_at = time.monotonic()
+                debug_image = self._build_boxed_preview(source_rgb, layers)
+                boxed_image_url = self._upload_images(
+                    [("debug_boxes.png", _png_bytes(debug_image))],
+                    log_id,
+                )[0]
+                debug_image_time = round(time.monotonic() - debug_started_at, 3)
             payload = build_submit_payload(
                 self._data_url(source_bytes, mime_type),
                 layers,
@@ -210,17 +258,6 @@ class FlyfusRevealLayerTool(Tool):
             upload_started_at = time.monotonic()
             image_urls = self._upload_images(delivery_images, log_id)
             upload_images_time = round(time.monotonic() - upload_started_at, 3)
-            boxed_image_url = ""
-            debug_image_time = 0.0
-            if debug:
-                stage = "upload_debug_image"
-                debug_started_at = time.monotonic()
-                debug_image = self._build_boxed_preview(source_rgb, layers)
-                boxed_image_url = self._upload_images(
-                    [("debug_boxes.png", _png_bytes(debug_image))],
-                    log_id,
-                )[0]
-                debug_image_time = round(time.monotonic() - debug_started_at, 3)
             result = {
                 "boxed_image_url": boxed_image_url,
                 "image_urls": image_urls,
@@ -231,6 +268,8 @@ class FlyfusRevealLayerTool(Tool):
                 "steps": steps,
                 "seed": seed,
                 "debug": debug,
+                "normalized_boxes": [list(layer.bbox) for layer in normalized_layers],
+                "pixel_boxes": [list(layer.bbox) for layer in layers],
                 "generation_time": completed.get("generation_time"),
                 "reveal_api_time": reveal_api_time,
                 "build_images_time": build_images_time,
@@ -262,7 +301,7 @@ class FlyfusRevealLayerTool(Tool):
             )
             message = f"RevealLayer 图层拆解失败：{error}"
             error_result = {
-                "boxed_image_url": "",
+                "boxed_image_url": boxed_image_url,
                 "image_urls": [],
                 "error": message,
                 "log_id": log_id,

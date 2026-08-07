@@ -32,9 +32,9 @@ parameters:
       en_US: Layers JSON
       zh_Hans: 图层坐标 JSON
     human_description:
-      en_US: Required for crop mode. JSON array of objects with name and bbox [x1,y1,x2,y2].
-      zh_Hans: crop 模式必填。对象数组，每项包含 name 和原图像素坐标 bbox [x1,y1,x2,y2]。
-    llm_description: 'crop 模式必填。格式：[{"name":"主产品","bbox":[10,20,800,900]}]，最多 6 项。不要单独框细碎小对象，应并入相邻主体或面板。'
+      en_US: Required for crop mode. JSON array with bbox coordinates normalized to 0-1000.
+      zh_Hans: crop 模式必填。对象数组，每项包含 name 和归一化到 0-1000 的 bbox [x1,y1,x2,y2]。
+    llm_description: 'crop 模式必填。bbox 固定使用 0-1000 坐标，格式：[{"name":"主产品","bbox":[10,20,800,900]}]，最多 6 项。'
   - name: version
     type: string
     required: true
