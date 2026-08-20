@@ -1,0 +1,63 @@
+identity:
+  author: qaqab
+  name: create_text_file
+  label:
+    en_US: Create Text File
+    zh_Hans: 生成文本文件
+description:
+  human:
+    en_US: Save text unchanged as a UTF-8 file, append the date to its name, upload it to Flyfus OSS, and return the public URL.
+    zh_Hans: 将文本原样保存为 UTF-8 文件，文件名追加日期后上传至 Flyfus OSS，并返回公网 URL。
+  llm: |-
+    将 content 原样编码为 UTF-8 文本并上传 OSS，不创建本地文件，不转换或校验内容格式。
+    format 只能是 txt、md、csv、json、yaml；filename 必填且不得包含路径。
+    最终文件名为 <filename>_YYYYMMDD.<format>，使用北京时间；相同扩展名不会重复追加。
+    content 最大 5 MiB。成功后返回 url、filename、format、size。
+parameters:
+  - name: content
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: Content
+      zh_Hans: 文件内容
+    human_description:
+      en_US: "Complete text to save. It is written unchanged using UTF-8 encoding. Maximum size: 5 MiB."
+      zh_Hans: 要写入文件的完整文本。工具按 UTF-8 原样保存，不转换内容，最大 5 MiB。
+    llm_description: 要原样写入文件的完整文本内容。
+  - name: format
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: txt
+        label: {en_US: TXT, zh_Hans: TXT}
+      - value: md
+        label: {en_US: Markdown, zh_Hans: Markdown}
+      - value: csv
+        label: {en_US: CSV, zh_Hans: CSV}
+      - value: json
+        label: {en_US: JSON, zh_Hans: JSON}
+      - value: yaml
+        label: {en_US: YAML, zh_Hans: YAML}
+    label:
+      en_US: Format
+      zh_Hans: 文件格式
+    human_description:
+      en_US: Select TXT, Markdown, CSV, JSON, or YAML. The tool does not convert or validate the content.
+      zh_Hans: 选择 TXT、Markdown、CSV、JSON 或 YAML。工具不会转换内容，也不会校验内容是否符合所选格式。
+    llm_description: 文件格式，只能选择 txt、md、csv、json 或 yaml。
+  - name: filename
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: Filename
+      zh_Hans: 文件名
+    human_description:
+      en_US: Enter a base filename without a path. The tool automatically appends the current date and selected extension.
+      zh_Hans: 输入不含目录路径的基础文件名。工具会自动追加当天日期和所选扩展名。
+    llm_description: 必填的基础文件名，不包含路径。可以带所选扩展名；工具会避免重复扩展名并追加北京时间年月日。
+extra:
+  python:
+    source: tools/text_file/create_text_file.py

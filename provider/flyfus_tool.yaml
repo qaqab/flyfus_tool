@@ -163,6 +163,7 @@ identity:
 tools:
   - tools/image/flyfus_image_generate.yaml
   - tools/reveal_layer/flyfus_reveal_layer.yaml
+  - tools/text_file/create_text_file.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
   - tools/skills/flyfus_skills.yaml
