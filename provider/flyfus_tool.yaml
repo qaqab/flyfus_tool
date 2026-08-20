@@ -166,5 +166,6 @@ tools:
   - tools/text_file/create_text_file.yaml
   - tools/next_step/set_next_step.yaml
   - tools/read_file/read_file.yaml
+  - tools/memory/flyfus_memory.yaml
   - tools/skills/flyfus_skills.yaml
   - tools/router/flyfus_tool_router.yaml

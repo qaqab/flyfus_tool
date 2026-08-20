@@ -1,0 +1,63 @@
+identity:
+  author: qaqab
+  name: flyfus_memory
+  label:
+    en_US: Flyfus Memory
+    zh_Hans: 读取场景记忆
+description:
+  human:
+    en_US: Find memory scenarios relevant to the current task, then read the selected memory content.
+    zh_Hans: 查找与当前任务相关的用户场景记忆，并读取选中场景的完整内容。
+  llm: |-
+    用本工具读取与当前任务相关的用户场景记忆，按以下顺序使用：
+    1. 先调用 list_scenarios 获取场景列表。已知业务路径时可传 path_prefix 缩小范围，否则不要猜测前缀。
+    2. 根据列表中的 path 和 summary 选择与当前任务相关的场景。
+    3. 再调用 read_scenario，使用列表返回的原始 path 读取完整 content；不要猜测、拼接或改写 path。
+    4. 将读取到的 content 作为用户记忆上下文，用于当前任务。
+    user_id 必须使用当前会话提供的完整 Dify 用户 ID，不要自行生成或只传数字。
+    列表为空时无需继续读取；content 为 null 时表示该场景当前没有可用记忆。
+parameters:
+  - name: method
+    type: select
+    required: true
+    form: llm
+    options:
+      - value: list_scenarios
+        label: {en_US: List Scenarios, zh_Hans: 获取场景列表}
+      - value: read_scenario
+        label: {en_US: Read Scenario, zh_Hans: 读取场景记忆}
+    label: {en_US: Method, zh_Hans: 操作}
+    human_description:
+      en_US: First list scenarios, then read one of the returned scenario paths.
+      zh_Hans: 先获取场景列表，再读取列表返回的指定场景。
+    llm_description: 先调用 list_scenarios；拿到 path 后再调用 read_scenario。
+  - name: user_id
+    type: string
+    required: true
+    form: llm
+    label: {en_US: User ID, zh_Hans: 用户 ID}
+    human_description:
+      en_US: Dify user ID in <numeric ID>:web_chat:<UUID> format.
+      zh_Hans: Dify 用户 ID，只接受“数字ID:web_chat:UUID”格式。
+    llm_description: 必须原样传入完整的 Dify user_id，例如 87:web_chat:7841eab3-ca44-4522-9956-840a4d749924；不要只传数字。
+  - name: path_prefix
+    type: string
+    required: false
+    form: llm
+    label: {en_US: Path Prefix, zh_Hans: 路径前缀}
+    human_description:
+      en_US: Optional scenario path prefix used only when listing scenarios.
+      zh_Hans: 可选。仅获取场景列表时使用，只返回该路径前缀下的场景。
+    llm_description: 仅 method=list_scenarios 时可选填写，例如 listing。
+  - name: path
+    type: string
+    required: false
+    form: llm
+    label: {en_US: Scenario Path, zh_Hans: 场景路径}
+    human_description:
+      en_US: Required when reading memory. Use an exact path returned by the scenario list.
+      zh_Hans: 读取场景记忆时必填。必须使用场景列表返回的原始路径。
+    llm_description: 仅 method=read_scenario 时必填。使用 list_scenarios 返回的原始 path，不要猜测或改写。
+extra:
+  python:
+    source: tools/memory/flyfus_memory.py
